@@ -1,0 +1,7 @@
+{
+  "name": "Catálogo Pro - Gestão Inteligente",
+  "description": "Sistema completo de gestão de inventário e catálogos com integração direta com WhatsApp, relatórios avançados e controle de estoque.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
