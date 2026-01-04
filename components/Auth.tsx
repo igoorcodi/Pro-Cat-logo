@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { AppView, User } from '../types';
-import { Package, Mail, Lock, User as UserIcon, ArrowRight, Github } from 'lucide-react';
+import { Package, Mail, Lock, User as UserIcon, ArrowRight, Github, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { supabase } from '../supabase';
 
 interface AuthProps {
   view: AppView;
@@ -10,34 +11,91 @@ interface AuthProps {
 }
 
 const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSwitchView = (newView: AppView) => {
+    setErrorMessage('');
+    setSuccessMessage('');
+    setView(newView);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
     
-    // Fake auth delay
-    // Added missing status and permissions properties to satisfy User type
-    setTimeout(() => {
-      onLogin({
-        id: '1',
-        name: email.split('@')[0].toUpperCase(),
-        email: email,
-        role: 'admin',
-        status: 'active',
-        permissions: {
-          dashboard: 'admin',
-          products: 'admin',
-          categories: 'admin',
-          catalogs: 'admin',
-          reports: 'admin',
-          settings: 'admin'
+    try {
+      if (view === 'register') {
+        const { data: newUser, error: registerError } = await supabase.rpc('register_user_secure', {
+             name_in: name.trim(),
+             email_in: email.trim(),
+             pass_in: password
+        });
+
+        if (registerError) {
+          console.error('Erro no registro:', registerError);
+          setErrorMessage(registerError.message.includes('unique_email') 
+            ? 'Este e-mail já está sendo usado.' 
+            : 'Erro ao criar conta. Certifique-se de que executou o SQL das funções no Supabase.');
+          setIsLoading(false);
+          return;
         }
-      });
+
+        if (newUser) {
+          setSuccessMessage('Conta criada com sucesso! Você já pode fazer login.');
+          setName('');
+          setEmail('');
+          setPassword('');
+          setTimeout(() => {
+            setView('login');
+            setSuccessMessage('');
+          }, 3000);
+        } else {
+          setErrorMessage('Erro inesperado ao criar usuário.');
+        }
+
+      } else {
+        const { data, error } = await supabase.rpc('login_user', {
+          email_input: email.trim(),
+          password_input: password
+        });
+
+        if (error) {
+          console.error('Erro na RPC de Login:', error);
+          setErrorMessage('Erro interno no servidor de autenticação.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          setErrorMessage('E-mail ou senha incorretos.');
+          setIsLoading(false);
+          return;
+        }
+
+        const userData = data[0];
+
+        if (userData.status !== 'active') {
+          setErrorMessage('Este usuário está desativado pelo administrador.');
+          setIsLoading(false);
+          return;
+        }
+
+        onLogin(userData as User);
+      }
+      
+    } catch (err) {
+      console.error('Erro de conexão:', err);
+      setErrorMessage('Erro de conexão com o banco de dados.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   if (view === 'onboarding') {
@@ -68,7 +126,6 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 overflow-hidden relative">
-      {/* Decorative blobs */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50" />
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-50 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 opacity-50" />
 
@@ -80,11 +137,25 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
           <h2 className="text-3xl font-black text-black tracking-tight">
             {view === 'login' ? 'Bom te ver de novo!' : 'Crie sua conta grátis'}
           </h2>
-          <p className="mt-2 text-black font-bold">Acesse a melhor plataforma de catálogos digitais.</p>
+          <p className="mt-2 text-black font-bold">Acesso seguro à sua vitrine.</p>
         </div>
 
         <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200 border border-slate-100">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {errorMessage && (
+              <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
+                <AlertCircle size={20} />
+                <span className="text-sm font-bold">{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 animate-in zoom-in duration-300">
+                <CheckCircle2 size={20} />
+                <span className="text-sm font-bold">{successMessage}</span>
+              </div>
+            )}
+
             {view === 'register' && (
               <div className="space-y-2">
                 <label className="text-xs font-black text-black uppercase tracking-widest px-1">Seu Nome</label>
@@ -93,6 +164,8 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
                   <input 
                     required
                     type="text" 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     placeholder="João Silva"
                     className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
                   />
@@ -109,7 +182,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="exemplo@email.com"
+                  placeholder="seu@email.com"
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
                 />
               </div>
@@ -127,7 +200,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="Mínimo 6 caracteres"
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
                 />
               </div>
@@ -135,14 +208,14 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
 
             <button 
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || successMessage !== ''}
               className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-70"
             >
               {isLoading ? (
                 <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  {view === 'login' ? 'Entrar no Sistema' : 'Criar Minha Conta'}
+                  {view === 'login' ? 'Acessar Sistema' : 'Criar Conta Segura'}
                   <ArrowRight size={20} />
                 </>
               )}
@@ -168,9 +241,9 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
 
         <p className="text-center text-black font-bold">
           {view === 'login' ? (
-            <>Não tem uma conta? <button onClick={() => setView('register')} className="text-indigo-600 font-black hover:underline">Cadastre-se</button></>
+            <>Novo por aqui? <button onClick={() => handleSwitchView('register')} className="text-indigo-600 font-black hover:underline">Cadastre-se</button></>
           ) : (
-            <>Já tem uma conta? <button onClick={() => setView('login')} className="text-indigo-600 font-black hover:underline">Entre agora</button></>
+            <>Já é cadastrado? <button onClick={() => handleSwitchView('login')} className="text-indigo-600 font-black hover:underline">Entrar</button></>
           )}
         </p>
       </div>

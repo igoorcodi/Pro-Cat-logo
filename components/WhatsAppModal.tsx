@@ -11,11 +11,7 @@ import {
 } from 'lucide-react';
 import { Product, MessageTemplate } from '../types';
 
-const mockTemplates: MessageTemplate[] = [
-  { id: '1', name: 'Padrão', content: 'Olá! Veja este produto: *{name}*. Por apenas *R$ {price}*. Confira os detalhes: {link}' },
-  { id: '2', name: 'Oferta Especial', content: '🔥 OFERTA IMPERDÍVEL! 🔥\n\n*{name}*\nde R$ {price_old} por apenas *R$ {price}*!\n\nAproveite agora: {link}' },
-  { id: '3', name: 'Lançamento', content: 'Acabou de chegar! 🚀\n\nConheça o novo *{name}*.\nPreço: R$ {price}\n\nGaranta o seu: {link}' },
-];
+const mockTemplates: MessageTemplate[] = [];
 
 interface WhatsAppModalProps {
   product: Product;
@@ -23,9 +19,9 @@ interface WhatsAppModalProps {
 }
 
 const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ product, onClose }) => {
-  const [selectedTemplate, setSelectedTemplate] = useState(mockTemplates[0]);
+  const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
   const [phone, setPhone] = useState('');
-  const [customMessage, setCustomMessage] = useState(selectedTemplate.content);
+  const [customMessage, setCustomMessage] = useState('Olá! Veja este produto: *{name}*. Por apenas *R$ {price}*. Confira os detalhes: {link}');
   const [copied, setCopied] = useState(false);
 
   const getProcessedMessage = () => {
@@ -66,7 +62,7 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ product, onClose }) => {
 
         <div className="p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <div className="aspect-square rounded-2xl overflow-hidden border border-slate-200">
+            <div className="aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
               <img src={product.images[0]} alt="" className="w-full h-full object-cover" />
             </div>
             
@@ -75,22 +71,28 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ product, onClose }) => {
                 <Layout size={14} /> Templates
               </label>
               <div className="space-y-2">
-                {mockTemplates.map(t => (
-                  <button 
-                    key={t.id}
-                    onClick={() => {
-                      setSelectedTemplate(t);
-                      setCustomMessage(t.content);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                      selectedTemplate.id === t.id 
-                        ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-500' 
-                        : 'bg-slate-50 text-slate-600 border-2 border-transparent hover:bg-slate-100'
-                    }`}
-                  >
-                    {t.name}
-                  </button>
-                ))}
+                {mockTemplates.length > 0 ? (
+                  mockTemplates.map(t => (
+                    <button 
+                      key={t.id}
+                      onClick={() => {
+                        setSelectedTemplate(t);
+                        setCustomMessage(t.content);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                        selectedTemplate?.id === t.id 
+                          ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-500' 
+                          : 'bg-slate-50 text-slate-600 border-2 border-transparent hover:bg-slate-100'
+                      }`}
+                    >
+                      {t.name}
+                    </button>
+                  ))
+                ) : (
+                  <div className="p-4 bg-slate-50 rounded-xl text-[10px] text-slate-400 font-bold uppercase text-center border-2 border-dashed border-slate-200">
+                    Nenhum template salvo
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -98,25 +100,25 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ product, onClose }) => {
           <div className="lg:col-span-3 space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <MessageSquare size={14} /> Mensagem
+                <MessageSquare size={14} /> Mensagem Personalizada
               </label>
               <textarea 
                 rows={6}
                 value={customMessage}
                 onChange={(e) => setCustomMessage(e.target.value)}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all resize-none"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all resize-none font-medium"
               />
               <p className="text-[10px] text-slate-400 italic">Dica: Use {'{name}'}, {'{price}'} e {'{link}'} para auto-preencher.</p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Número (Opcional)</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Número do Destinatário (Opcional)</label>
               <input 
                 type="text" 
                 placeholder="Ex: 55 11 99999-9999"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all font-bold"
               />
             </div>
 
@@ -126,14 +128,14 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ product, onClose }) => {
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-slate-200 hover:bg-slate-50 text-slate-600 rounded-2xl font-bold transition-all"
               >
                 {copied ? <Check size={20} className="text-emerald-500" /> : <Copy size={20} />}
-                {copied ? 'Copiado!' : 'Copiar Texto'}
+                {copied ? 'Copiado!' : 'Copiar'}
               </button>
               <button 
                 onClick={handleSend}
                 className="flex-[1.5] flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-emerald-100"
               >
                 <Send size={20} />
-                Enviar Mensagem
+                Enviar
               </button>
             </div>
           </div>

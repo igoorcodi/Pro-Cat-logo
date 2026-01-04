@@ -1,13 +1,13 @@
 
-import React, { useState, useMemo } from 'react';
-import { X, Save, Trash2, Image as ImageIcon, Search, Check } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload } from 'lucide-react';
 import { Catalog, Product } from '../types';
 
 interface CatalogFormProps {
   initialData?: Catalog;
   products: Product[];
   onClose: () => void;
-  onSave: (catalog: Catalog) => void;
+  onSave: (catalog: Partial<Catalog>) => void;
   onDelete: (id: string) => void;
 }
 
@@ -15,12 +15,13 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
   const [formData, setFormData] = useState<Partial<Catalog>>(initialData || {
     name: '',
     description: '',
-    coverImage: 'https://picsum.photos/seed/catalog/800/600',
+    coverImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
     productIds: [],
     createdAt: new Date().toISOString()
   });
 
   const [searchTerm, setSearchTerm] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => 
@@ -39,20 +40,31 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
     });
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setFormData(prev => ({
+        ...prev,
+        coverImage: base64
+      }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
-    
-    onSave({
-      ...formData,
-      id: initialData?.id || Math.random().toString(36).substr(2, 9),
-    } as Catalog);
+    onSave(formData);
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col h-[90vh]">
-        {/* Header - Indigo to Purple Gradient like the image */}
         <div className="p-6 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shadow-lg backdrop-blur-sm border border-white/20">
@@ -69,7 +81,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-          {/* Left Side: Info */}
           <div className="w-full lg:w-1/2 p-10 overflow-y-auto border-r border-slate-100">
             <form id="catalog-form" onSubmit={handleSubmit} className="space-y-8">
               <div className="space-y-2">
@@ -95,31 +106,59 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Imagem de Capa (URL)</label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Imagem de Capa</label>
+                  <button 
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-700"
+                  >
+                    <Upload size={14} /> Fazer Upload
+                  </button>
+                </div>
+
                 <input 
-                  type="text"
-                  value={formData.coverImage}
-                  onChange={e => setFormData(prev => ({ ...prev, coverImage: e.target.value }))}
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-medium"
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="hidden"
                 />
+
+                <div className="relative group">
+                  <input 
+                    type="text"
+                    value={formData.coverImage}
+                    onChange={e => setFormData(prev => ({ ...prev, coverImage: e.target.value }))}
+                    placeholder="URL da imagem..."
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-medium pr-12"
+                  />
+                  <ImageIcon className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                </div>
+
                 <div className="mt-6 aspect-video rounded-3xl overflow-hidden border border-slate-200 relative group bg-slate-100 shadow-inner">
                   <img src={formData.coverImage} alt="Preview" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
-                    <span className="text-white text-xs font-black uppercase tracking-widest">Visualização da Capa</span>
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button 
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-6 py-2 bg-white text-slate-900 rounded-full font-black text-xs uppercase tracking-widest shadow-xl"
+                    >
+                      Alterar Capa
+                    </button>
                   </div>
                 </div>
               </div>
             </form>
           </div>
 
-          {/* Right Side: Product Selection */}
           <div className="w-full lg:w-1/2 p-10 bg-slate-50/50 flex flex-col h-full overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <div>
                 <h4 className="text-xl font-black text-slate-800 tracking-tight">Selecionar Produtos</h4>
                 <p className="text-xs text-slate-500 font-bold">
-                  {formData.productIds?.length} produtos selecionados
+                  {formData.productIds?.length || 0} produtos selecionados
                 </p>
               </div>
               <div className="relative">
@@ -129,7 +168,7 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                   placeholder="Buscar produtos..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-11 pr-5 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none shadow-sm"
+                  className="pl-11 pr-5 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none shadow-sm w-full"
                 />
               </div>
             </div>
@@ -162,15 +201,21 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                   </div>
                 );
               })}
+              {filteredProducts.length === 0 && (
+                <div className="text-center py-20 opacity-30">
+                  <Search size={40} className="mx-auto mb-4" />
+                  <p className="font-black uppercase tracking-widest text-xs">Nenhum produto encontrado</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Footer Actions - Layout matching the provided screenshot */}
         <div className="px-10 py-6 bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
           <div>
             {initialData && (
               <button 
+                type="button"
                 onClick={() => onDelete(initialData.id)}
                 className="flex items-center gap-2 px-5 py-3 text-red-500 hover:bg-red-50 rounded-2xl font-black text-sm transition-all"
               >

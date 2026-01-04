@@ -28,8 +28,8 @@ import {
   FileText,
   Layers,
   Tags,
-  // Fix: Added missing Package icon import
-  Package
+  Package,
+  LogOut
 } from 'lucide-react';
 import { Product, Category, User, UserPermissions, PermissionLevel } from '../types';
 
@@ -41,6 +41,7 @@ interface SettingsViewProps {
   onUpdateCurrentUser: (user: User) => void;
   systemUsers: User[];
   setSystemUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  onLogout: () => void;
 }
 
 interface AuditLog {
@@ -53,11 +54,7 @@ interface AuditLog {
   ip: string;
 }
 
-const mockLogs: AuditLog[] = [
-  { id: '1', user: 'Admin', action: 'Login realizado', module: 'Auth', timestamp: '2024-05-20 14:30:22', status: 'success', ip: '192.168.1.1' },
-  { id: '2', user: 'Admin', action: 'Produto "Tênis Ultra" editado', module: 'Produtos', timestamp: '2024-05-20 15:10:05', status: 'success', ip: '192.168.1.1' },
-  { id: '3', user: 'Admin', action: 'Tentativa de exclusão negada', module: 'Catálogos', timestamp: '2024-05-20 16:05:40', status: 'warning', ip: '192.168.1.1' },
-];
+const mockLogs: AuditLog[] = [];
 
 type MappingState = { [key: string]: number };
 type ImportType = 'products' | 'categories' | 'subcategories';
@@ -69,7 +66,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   currentUser, 
   onUpdateCurrentUser,
   systemUsers,
-  setSystemUsers
+  setSystemUsers,
+  onLogout
 }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
@@ -309,18 +307,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
             
-            <div className="flex items-center gap-4 pt-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-10 border-t border-slate-100">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={handleSaveProfile}
+                  className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-3"
+                >
+                  <Check size={20} /> Salvar Alterações
+                </button>
+                {profileSuccess && (
+                  <span className="text-emerald-600 font-bold text-sm animate-in fade-in slide-in-from-left-2 flex items-center gap-2">
+                    <CheckCircle size={18} /> Alterações salvas!
+                  </span>
+                )}
+              </div>
+
               <button 
-                onClick={handleSaveProfile}
-                className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-3"
+                onClick={onLogout}
+                className="flex items-center gap-2 px-6 py-4 bg-white border border-red-100 hover:bg-red-50 text-red-500 rounded-2xl font-black text-sm transition-all shadow-sm"
               >
-                <Check size={20} /> Salvar Alterações
+                <LogOut size={20} /> Encerrar Sessão
               </button>
-              {profileSuccess && (
-                <span className="text-emerald-600 font-bold text-sm animate-in fade-in slide-in-from-left-2 flex items-center gap-2">
-                  <CheckCircle size={18} /> Alterações salvas com sucesso!
-                </span>
-              )}
             </div>
           </div>
         )}
@@ -520,6 +527,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               ))}
             </div>
+            {systemUsers.length === 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center py-20 opacity-20">
+                <Users size={64} />
+                <p className="mt-4 font-black uppercase tracking-widest">Nenhum usuário cadastrado</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -532,41 +545,48 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <p className="text-sm text-slate-500 font-medium">Histórico completo de modificações no sistema.</p>
               </div>
             </div>
-            <div className="border border-slate-100 rounded-[2rem] overflow-hidden">
-               <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data / Usuário</th>
-                      <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação</th>
-                      <th className="px-6 py-5 text-right px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filteredLogs.map(log => (
-                      <tr key={log.id}>
-                        <td className="px-6 py-4">
-                           <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-[10px] font-black">{log.user[0]}</div>
-                              <div>
-                                <p className="text-sm font-bold text-slate-800">{log.user}</p>
-                                <p className="text-[10px] text-slate-400 font-medium">{log.timestamp}</p>
-                              </div>
-                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-sm font-medium text-slate-600">{log.action}</p>
-                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{log.module}</p>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${log.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                            {log.status}
-                          </span>
-                        </td>
+            {filteredLogs.length > 0 ? (
+              <div className="border border-slate-100 rounded-[2rem] overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data / Usuário</th>
+                        <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação</th>
+                        <th className="px-6 py-5 text-right px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-               </table>
-            </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {filteredLogs.map(log => (
+                        <tr key={log.id}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-[10px] font-black">{log.user[0]}</div>
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800">{log.user}</p>
+                                  <p className="text-[10px] text-slate-400 font-medium">{log.timestamp}</p>
+                                </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-sm font-medium text-slate-600">{log.action}</p>
+                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{log.module}</p>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${log.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center py-20 opacity-20">
+                <History size={64} />
+                <p className="mt-4 font-black uppercase tracking-widest">Sem logs registrados</p>
+              </div>
+            )}
           </div>
         )}
 

@@ -12,7 +12,8 @@ import {
   Package,
   Tags,
   Layout,
-  AlertTriangle
+  AlertTriangle,
+  DollarSign
 } from 'lucide-react';
 import { Product, Category } from '../types';
 
@@ -20,7 +21,7 @@ interface ProductFormProps {
   initialData?: Product;
   categories: Category[];
   isClone?: boolean;
-  onSave: (product: Product) => void;
+  onSave: (product: Partial<Product>) => void;
   onCancel: () => void;
 }
 
@@ -32,11 +33,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     sku: '',
     stock: 0,
     status: 'active',
-    category: '',
     categoryId: '',
     subcategoryId: '',
     tags: [],
-    images: ['https://picsum.photos/seed/newproduct/600/600']
+    images: []
   });
 
   const [tagInput, setTagInput] = useState('');
@@ -51,22 +51,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     e.preventDefault();
     setIsSaving(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      onSave({
-        ...formData,
-        id: (isClone ? Math.random().toString(36).substr(2, 9) : (initialData?.id || Math.random().toString(36).substr(2, 9))),
-        createdAt: initialData?.createdAt || new Date().toISOString()
-      } as Product);
-      setIsSaving(false);
-    }, 800);
+    // O App.tsx tratará se é INSERT ou UPDATE baseado no ID
+    onSave(formData);
+    setIsSaving(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Verificar limite de 5 imagens
     if ((formData.images?.length || 0) >= 5) {
       alert("Limite máximo de 5 imagens atingido.");
       return;
@@ -81,8 +74,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
       }));
     };
     reader.readAsDataURL(file);
-    
-    // Resetar input para permitir selecionar a mesma imagem novamente se for apagada
     e.target.value = '';
   };
 
@@ -98,12 +89,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
   };
 
   const handleCategoryChange = (catId: string) => {
-    const cat = categories.find(c => c.id === catId);
     setFormData(prev => ({
       ...prev,
       categoryId: catId,
-      category: cat ? cat.name : '',
-      subcategoryId: '' // Reseta a subcategoria ao trocar a categoria pai
+      subcategoryId: '' 
     }));
   };
 
@@ -115,8 +104,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
             <AlertTriangle size={30} />
           </div>
           <div className="text-center sm:text-left">
-            <h4 className="text-lg font-black text-amber-900 uppercase tracking-tight">Produto Clonado com Sucesso!</h4>
-            <p className="text-sm font-bold text-amber-700">Por favor, revise e edite o nome, SKU e preço antes de salvar.</p>
+            <h4 className="text-lg font-black text-amber-900 uppercase tracking-tight">Clonando Produto</h4>
+            <p className="text-sm font-bold text-amber-700">O novo produto será criado ao salvar.</p>
           </div>
         </div>
       )}
@@ -135,7 +124,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Basic Info Section */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -152,7 +140,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                 type="text" 
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none ${isClone ? 'border-amber-300 ring-2 ring-amber-50' : 'border-slate-200'}`}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                 placeholder="Ex: Tênis Esportivo Pro"
               />
             </div>
@@ -163,85 +151,80 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                 rows={4}
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all resize-none outline-none"
-                placeholder="Detalhes sobre o produto, materiais, tamanhos..."
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Preço (R$)*</label>
-              <input 
-                required
-                type="number" 
-                step="0.01"
-                value={formData.price}
-                onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) }))}
-                className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none ${isClone ? 'border-amber-300 ring-2 ring-amber-50' : 'border-slate-200'}`}
-              />
+              <label className="text-sm font-semibold text-slate-700">Preço de Venda (R$)*</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">R$</div>
+                <input 
+                  required
+                  type="number" 
+                  step="0.01"
+                  min="0"
+                  value={formData.price}
+                  onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700"
+                  placeholder="0.00"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">SKU / Código Único</label>
+              <label className="text-sm font-semibold text-slate-700">SKU / Código</label>
               <input 
                 type="text" 
                 value={formData.sku}
                 onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                className={`w-full px-4 py-3 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none ${isClone ? 'border-amber-300 ring-2 ring-amber-50' : 'border-slate-200'}`}
-                placeholder="EX: TNS-001-BLK"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
           </div>
         </section>
 
-        {/* Inventory & Category Section */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
               <Package size={18} />
             </div>
-            <h3 className="font-bold text-lg">Estoque e Categorização</h3>
+            <h3 className="font-bold text-lg">Estoque e Categoria</h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Quantidade em Estoque</label>
+              <label className="text-sm font-semibold text-slate-700">Estoque</label>
               <input 
                 type="number" 
                 value={formData.stock}
-                onChange={(e) => setFormData(prev => ({ ...prev, stock: parseInt(e.target.value) }))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                onChange={(e) => setFormData(prev => ({ ...prev, stock: parseInt(e.target.value) || 0 }))}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <Tags size={14} className="text-indigo-600" /> Categoria Principal*
-              </label>
+              <label className="text-sm font-semibold text-slate-700">Categoria Principal*</label>
               <select 
                 required
                 value={formData.categoryId}
                 onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none cursor-pointer"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
               >
                 <option value="">Selecionar...</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-              {categories.length === 0 && (
-                <p className="text-[10px] text-amber-600 font-bold uppercase mt-1">Nenhuma categoria cadastrada!</p>
-              )}
             </div>
 
-            {selectedCategory && selectedCategory.subcategories.length > 0 && (
+            {selectedCategory && selectedCategory.subcategories?.length > 0 && (
               <div className="space-y-2 animate-in slide-in-from-top-2">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Layout size={14} className="text-emerald-600" /> Subcategoria
-                </label>
+                <label className="text-sm font-semibold text-slate-700">Subcategoria</label>
                 <select 
                   value={formData.subcategoryId}
                   onChange={(e) => setFormData(prev => ({ ...prev, subcategoryId: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 transition-all outline-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                 >
                   <option value="">Nenhuma</option>
                   {selectedCategory.subcategories.map(sub => (
@@ -250,41 +233,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                 </select>
               </div>
             )}
-
-            <div className="space-y-2 col-span-2">
-              <label className="text-sm font-semibold text-slate-700">Tags / Etiquetas</label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                  className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
-                  placeholder="Ex: Novo, Oferta, Verão"
-                />
-                <button 
-                  type="button"
-                  onClick={addTag}
-                  className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all"
-                >
-                  Adicionar
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {formData.tags?.map(tag => (
-                  <span key={tag} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold">
-                    {tag}
-                    <button onClick={() => removeTag(tag)} className="hover:text-indigo-900">
-                      <X size={14} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
           </div>
         </section>
 
-        {/* Images Section */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
@@ -328,8 +279,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
           </div>
         </section>
 
-        {/* Actions */}
-        <div className="fixed bottom-0 left-0 right-0 lg:left-64 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 flex items-center justify-end gap-4 z-40">
+        <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 flex items-center justify-end gap-4 z-40">
           <button 
             type="button"
             onClick={onCancel}
@@ -340,7 +290,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
           <button 
             type="submit"
             disabled={isSaving}
-            className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg disabled:opacity-50"
           >
             {isSaving ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

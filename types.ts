@@ -2,6 +2,8 @@
 export type UserStatus = 'active' | 'inactive';
 export type ProductStatus = 'active' | 'inactive' | 'archived';
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'admin';
+export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered';
+export type CustomerStatus = 'active' | 'inactive';
 
 export interface UserPermissions {
   dashboard: PermissionLevel;
@@ -21,6 +23,24 @@ export interface User {
   role: 'admin' | 'editor' | 'viewer';
   status: UserStatus;
   permissions: UserPermissions;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  document?: string;
+  zipCode?: string;
+  address?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  status: CustomerStatus;
+  notes?: string;
+  createdAt: string;
+  user_id: string;
 }
 
 export interface Subcategory {
@@ -50,6 +70,28 @@ export interface Product {
   createdAt: string;
 }
 
+export interface QuotationItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number; 
+  discount: number;
+}
+
+export interface Quotation {
+  id: string;
+  clientName: string;
+  clientPhone: string;
+  sellerName: string;
+  quotationDate: string;
+  keyword?: string;
+  items: QuotationItem[];
+  total: number;
+  status: QuotationStatus;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Catalog {
   id: string;
   name: string;
@@ -59,17 +101,11 @@ export interface Catalog {
   createdAt: string;
 }
 
+// Added MessageTemplate to fix the import error in components/WhatsAppModal.tsx
 export interface MessageTemplate {
   id: string;
   name: string;
   content: string;
-}
-
-export interface DashboardStats {
-  totalProducts: number;
-  lowStockCount: number;
-  activeCatalogs: number;
-  totalShares: number;
 }
 
 export type AppView = 
@@ -85,4 +121,8 @@ export type AppView =
   | 'help'
   | 'login'
   | 'register'
-  | 'onboarding';
+  | 'onboarding'
+  | 'quotations'
+  | 'quotation-form'
+  | 'customers'
+  | 'customer-form';
