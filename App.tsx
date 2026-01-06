@@ -43,6 +43,7 @@ import PublicCatalogView from './components/PublicCatalogView';
 import ShareCatalogModal from './components/ShareCatalogModal';
 import CustomerList from './components/CustomerList';
 import CustomerForm from './components/CustomerForm';
+import ConfirmationModal from './components/ConfirmationModal';
 
 const viewTitles: Record<string, string> = {
   'dashboard': 'Dashboard',
@@ -81,6 +82,22 @@ const App: React.FC = () => {
   const [isSharingCatalog, setIsSharingCatalog] = useState<Catalog | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+
+  // States for deletion modal
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    type: 'product' | 'customer' | 'quotation';
+    id: string;
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'product',
+    id: '',
+    title: '',
+    message: ''
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const forceLogout = useCallback(() => {
     localStorage.removeItem('catalog_pro_session');
@@ -257,23 +274,39 @@ const App: React.FC = () => {
     else { fetchData(); setView('quotations'); }
   };
 
-  const handleDeleteProduct = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja desativar este produto?')) {
-      try {
-        const { error } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
-        if (error) alert(`Erro ao excluir produto: ${error.message}`);
-        else setProducts(prev => prev.filter(p => p.id !== id));
-      } catch (err) { alert('Ocorreu um erro inesperado.'); }
-    }
+  // Centralized Deletion Logic
+  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation', id: string, name: string) => {
+    setDeleteModal({
+      isOpen: true,
+      type,
+      id,
+      title: 'Confirmar Exclusão',
+      message: `Tem certeza que deseja excluir "${name}"? Esta ação desativará o registro no sistema.`
+    });
   };
 
-  const handleDeleteCustomer = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja desativar este cliente?')) {
-      try {
+  const processDeletion = async () => {
+    const { type, id } = deleteModal;
+    setIsDeleting(true);
+    try {
+      if (type === 'product') {
+        const { error } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
+        if (error) throw error;
+        setProducts(prev => prev.filter(p => p.id !== id));
+      } else if (type === 'customer') {
         const { error } = await supabase.from('customers').update({ status: 'inactive' }).eq('id', id);
-        if (error) alert(`Erro ao desativar cliente: ${error.message}`);
-        else setCustomers(prev => prev.filter(c => c.id !== id));
-      } catch (err) { alert('Ocorreu um erro inesperado.'); }
+        if (error) throw error;
+        setCustomers(prev => prev.filter(c => c.id !== id));
+      } else if (type === 'quotation') {
+        const { error } = await supabase.from('quotations').delete().eq('id', id);
+        if (error) throw error;
+        setQuotations(prev => prev.filter(q => q.id !== id));
+      }
+      setDeleteModal(prev => ({ ...prev, isOpen: false }));
+    } catch (err: any) {
+      alert(`Erro ao processar exclusão: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -360,13 +393,13 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
           {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} />}
-          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={handleDeleteCustomer} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
+          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={(id) => { const c = customers.find(x => x.id === id); if(c) openDeleteConfirmation('customer', id, c.name); }} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
-          {view === 'products' && <ProductList products={products} onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} onDelete={handleDeleteProduct} onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} />}
+          {view === 'products' && <ProductList products={products} onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} onDelete={(id) => { const p = products.find(x => x.id === id); if(p) openDeleteConfirmation('product', id, p.name); }} onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} />}
           {view === 'product-form' && <ProductForm initialData={editingProduct} categories={categories} isClone={isCloning} onSave={handleSaveProduct} onCancel={() => setView('products')} />}
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
-          {view === 'quotations' && <QuotationList quotations={quotations} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={async (id) => { if (confirm('Excluir orçamento?')) { await supabase.from('quotations').delete().eq('id', id); fetchData(); } }} />}
+          {view === 'quotations' && <QuotationList quotations={quotations} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={handleLogout} onRefresh={fetchData} />}
         </div>
@@ -374,6 +407,16 @@ const App: React.FC = () => {
 
       {editingCatalog && <CatalogForm initialData={editingCatalog === 'new' ? undefined : editingCatalog} products={products} onClose={() => setEditingCatalog(null)} onSave={handleSaveCatalog} onDelete={async (id) => { await supabase.from('catalogs').delete().eq('id', id); fetchData(); setEditingCatalog(null); }} />}
       {isSharingCatalog && <ShareCatalogModal catalog={isSharingCatalog} onClose={() => setIsSharingCatalog(null)} />}
+      
+      {/* Central Confirmation Modal */}
+      <ConfirmationModal 
+        isOpen={deleteModal.isOpen}
+        title={deleteModal.title}
+        message={deleteModal.message}
+        onConfirm={processDeletion}
+        onCancel={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
+        isLoading={isDeleting}
+      />
     </div>
   );
 };
