@@ -183,11 +183,11 @@ const App: React.FC = () => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     if (window.confirm('Deseja realmente sair do sistema?')) { 
       setIsLoggingOut(true); 
-      // Pequeno delay para efeito visual de logout seguro
+      // Pequeno delay para efeito visual de logout seguro antes de redirecionar
       setTimeout(() => { 
         forceLogout(); 
         setIsLoggingOut(false);
-      }, 800); 
+      }, 600); 
     } 
   }, [forceLogout]);
 
@@ -297,7 +297,7 @@ const App: React.FC = () => {
         const { error: prodError } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
         if (prodError) throw prodError;
 
-        // 2. Unlink from all catalogs in DB
+        // 2. Unlink from all catalogs in DB (Important for counter accuracy)
         const catalogsToUpdate = catalogs.filter(c => c.productIds.includes(id));
         if (catalogsToUpdate.length > 0) {
           const updatePromises = catalogsToUpdate.map(async (cat) => {
@@ -344,17 +344,12 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden relative">
       {/* Logout Overlay Screen */}
       {isLoggingOut && (
-        <div className="fixed inset-0 z-[999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center animate-in fade-in duration-500">
-          <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl flex flex-col items-center gap-8 border border-slate-100/50">
-            <div className="relative">
-              <div className="w-20 h-20 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <LogOut className="text-indigo-600 opacity-20" size={24} />
-              </div>
-            </div>
-            <div className="text-center space-y-2">
+        <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-xl flex items-center justify-center animate-in fade-in duration-300">
+          <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-6">
+            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <div className="text-center">
               <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Encerrando sessão</p>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-tight">Saindo com segurança...</p>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-tight mt-1">Saindo com segurança...</p>
             </div>
           </div>
         </div>
