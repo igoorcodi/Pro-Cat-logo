@@ -1,4 +1,3 @@
-
 /**
  * COMANDO SQL PARA O BANCO DE DADOS (Execute no Editor SQL do Supabase):
  * 
@@ -143,7 +142,7 @@ const App: React.FC = () => {
       
       if (catalogData) setCatalogs(catalogData.map(c => ({ 
         ...c, 
-        productIds: c.product_ids, 
+        productIds: c.product_ids || [], 
         coverImage: c.cover_image,
         createdAt: c.created_at 
       })));
@@ -184,7 +183,11 @@ const App: React.FC = () => {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     if (window.confirm('Deseja realmente sair do sistema?')) { 
       setIsLoggingOut(true); 
-      setTimeout(() => { forceLogout(); setIsLoggingOut(false); }, 600); 
+      // Pequeno delay para efeito visual de logout seguro
+      setTimeout(() => { 
+        forceLogout(); 
+        setIsLoggingOut(false);
+      }, 800); 
     } 
   }, [forceLogout]);
 
@@ -281,7 +284,7 @@ const App: React.FC = () => {
       type,
       id,
       title: 'Confirmar Exclusão',
-      message: `Tem certeza que deseja excluir "${name}"? Esta ação desativará o registro no sistema.`
+      message: `Tem certeza que deseja excluir "${name}"? Esta ação desativará o registro no sistema e removerá o produto de todos os catálogos vinculados.`
     });
   };
 
@@ -290,9 +293,27 @@ const App: React.FC = () => {
     setIsDeleting(true);
     try {
       if (type === 'product') {
-        const { error } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
-        if (error) throw error;
+        // 1. Mark product as inactive in DB
+        const { error: prodError } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
+        if (prodError) throw prodError;
+
+        // 2. Unlink from all catalogs in DB
+        const catalogsToUpdate = catalogs.filter(c => c.productIds.includes(id));
+        if (catalogsToUpdate.length > 0) {
+          const updatePromises = catalogsToUpdate.map(async (cat) => {
+            const updatedIds = cat.productIds.filter(pid => pid !== id);
+            return supabase.from('catalogs').update({ product_ids: updatedIds }).eq('id', cat.id);
+          });
+          await Promise.all(updatePromises);
+        }
+
+        // 3. Update local states immediately for UX
         setProducts(prev => prev.filter(p => p.id !== id));
+        setCatalogs(prev => prev.map(c => ({
+          ...c,
+          productIds: c.productIds.filter(pid => pid !== id)
+        })));
+
       } else if (type === 'customer') {
         const { error } = await supabase.from('customers').update({ status: 'inactive' }).eq('id', id);
         if (error) throw error;
@@ -321,12 +342,19 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden relative">
+      {/* Logout Overlay Screen */}
       {isLoggingOut && (
-        <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-xl flex items-center justify-center animate-in fade-in duration-300">
-          <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-6">
-            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-            <div className="text-center">
+        <div className="fixed inset-0 z-[999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center animate-in fade-in duration-500">
+          <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl flex flex-col items-center gap-8 border border-slate-100/50">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <LogOut className="text-indigo-600 opacity-20" size={24} />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
               <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Encerrando sessão</p>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-tight">Saindo com segurança...</p>
             </div>
           </div>
         </div>
