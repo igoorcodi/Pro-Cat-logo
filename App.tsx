@@ -24,7 +24,9 @@ import {
   User as UserIcon,
   Tags,
   FileText,
-  Users
+  Users,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { AppView, User, Product, Catalog, Category, Quotation, Customer } from './types';
@@ -187,7 +189,7 @@ const App: React.FC = () => {
       setTimeout(() => { 
         forceLogout(); 
         setIsLoggingOut(false);
-      }, 600); 
+      }, 1200); 
     } 
   }, [forceLogout]);
 
@@ -284,7 +286,7 @@ const App: React.FC = () => {
       type,
       id,
       title: 'Confirmar Exclusão',
-      message: `Tem certeza que deseja excluir "${name}"? Esta ação desativará o registro no sistema e removerá o produto de todos os catálogos vinculados.`
+      message: `Tem certeza que deseja excluir "${name}"? Esta ação desativará o registro no sistema e removerá o produto de todos os catálogos onde ele estiver selecionado.`
     });
   };
 
@@ -297,7 +299,7 @@ const App: React.FC = () => {
         const { error: prodError } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
         if (prodError) throw prodError;
 
-        // 2. Unlink from all catalogs in DB (Important for counter accuracy)
+        // 2. Unlink from all catalogs in DB (Important for counter accuracy requested by user)
         const catalogsToUpdate = catalogs.filter(c => c.productIds.includes(id));
         if (catalogsToUpdate.length > 0) {
           const updatePromises = catalogsToUpdate.map(async (cat) => {
@@ -342,16 +344,33 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden relative">
-      {/* Logout Overlay Screen */}
+      {/* Logout Overlay Screen - Requisito do Usuário */}
       {isLoggingOut && (
-        <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-xl flex items-center justify-center animate-in fade-in duration-300">
-          <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-6">
-            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-            <div className="text-center">
-              <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Encerrando sessão</p>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-tight mt-1">Saindo com segurança...</p>
+        <div className="fixed inset-0 z-[999] bg-slate-950/90 backdrop-blur-2xl flex items-center justify-center animate-in fade-in duration-500">
+          <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl flex flex-col items-center gap-8 border border-slate-100/50 max-w-sm w-full mx-4">
+            <div className="relative">
+              <div className="w-24 h-24 border-8 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <CheckCircle2 className="text-indigo-600 opacity-20" size={32} />
+              </div>
+            </div>
+            <div className="text-center space-y-3">
+              <p className="font-black text-slate-800 uppercase tracking-widest text-lg">Encerrando sessão</p>
+              <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Obrigado por utilizar o Pro Catálogo!</p>
+            </div>
+            <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-600 animate-progress" />
             </div>
           </div>
+          <style>{`
+            @keyframes progress {
+                from { width: 0%; }
+                to { width: 100%; }
+            }
+            .animate-progress {
+                animation: progress 1.2s linear forwards;
+            }
+          `}</style>
         </div>
       )}
 
