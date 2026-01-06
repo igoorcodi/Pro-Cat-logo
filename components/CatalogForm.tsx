@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload } from 'lucide-react';
+import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload, AlertCircle, FileImage } from 'lucide-react';
 import { Catalog, Product } from '../types';
 
 interface CatalogFormProps {
@@ -15,7 +15,7 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
   const [formData, setFormData] = useState<Partial<Catalog>>(initialData || {
     name: '',
     description: '',
-    coverImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
+    coverImage: '',
     productIds: [],
     createdAt: new Date().toISOString()
   });
@@ -44,6 +44,13 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validar tipo de arquivo no lado do cliente
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      alert("Por favor, selecione apenas imagens nos formatos JPG ou PNG.");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const base64 = event.target?.result as string;
@@ -58,7 +65,14 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return;
+    if (!formData.name) {
+      alert("O nome do catálogo é obrigatório.");
+      return;
+    }
+    if (!formData.coverImage) {
+      alert("Por favor, selecione uma imagem de capa (JPG ou PNG).");
+      return;
+    }
     onSave(formData);
   };
 
@@ -81,7 +95,7 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-          <div className="w-full lg:w-1/2 p-10 overflow-y-auto border-r border-slate-100">
+          <div className="w-full lg:w-1/2 p-6 lg:p-10 overflow-y-auto border-r border-slate-100 custom-scrollbar">
             <form id="catalog-form" onSubmit={handleSubmit} className="space-y-8">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Catálogo*</label>
@@ -108,52 +122,55 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Imagem de Capa</label>
-                  <button 
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-700"
-                  >
-                    <Upload size={14} /> Fazer Upload
-                  </button>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Imagem de Capa (JPG ou PNG)*</label>
                 </div>
 
                 <input 
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept="image/*"
+                  accept=".jpg,.jpeg,.png"
                   className="hidden"
                 />
 
-                <div className="relative group">
-                  <input 
-                    type="text"
-                    value={formData.coverImage}
-                    onChange={e => setFormData(prev => ({ ...prev, coverImage: e.target.value }))}
-                    placeholder="URL da imagem..."
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-medium pr-12"
-                  />
-                  <ImageIcon className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                </div>
-
-                <div className="mt-6 aspect-video rounded-3xl overflow-hidden border border-slate-200 relative group bg-slate-100 shadow-inner">
-                  <img src={formData.coverImage} alt="Preview" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button 
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-6 py-2 bg-white text-slate-900 rounded-full font-black text-xs uppercase tracking-widest shadow-xl"
-                    >
-                      Alterar Capa
-                    </button>
-                  </div>
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`mt-2 aspect-video rounded-3xl overflow-hidden border-4 border-dashed transition-all cursor-pointer group relative flex flex-col items-center justify-center text-center p-6 ${
+                    formData.coverImage 
+                      ? 'border-indigo-100 hover:border-indigo-300' 
+                      : 'border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200'
+                  }`}
+                >
+                  {formData.coverImage ? (
+                    <>
+                      <img 
+                        src={formData.coverImage} 
+                        alt="Capa do Catálogo" 
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                        <div className="px-6 py-2 bg-white text-slate-900 rounded-full font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-2">
+                          <Upload size={14} /> Alterar Imagem
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto text-indigo-500 group-hover:scale-110 transition-transform">
+                        <FileImage size={32} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-800 uppercase tracking-tight">Selecionar Foto de Capa</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Formatos aceitos: JPG ou PNG</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </form>
           </div>
 
-          <div className="w-full lg:w-1/2 p-10 bg-slate-50/50 flex flex-col h-full overflow-hidden">
+          <div className="w-full lg:w-1/2 p-6 lg:p-10 bg-slate-50/50 flex flex-col h-full overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <div>
                 <h4 className="text-xl font-black text-slate-800 tracking-tight">Selecionar Produtos</h4>
@@ -187,7 +204,7 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                     }`}
                   >
                     <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 shadow-inner border border-slate-100">
-                      <img src={product.images[0]} alt="" className="w-full h-full object-cover" />
+                      <img src={product.images[0] || 'https://via.placeholder.com/100'} alt="" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-slate-800 text-base truncate tracking-tight">{product.name}</p>

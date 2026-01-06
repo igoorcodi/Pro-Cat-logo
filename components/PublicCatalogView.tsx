@@ -10,15 +10,17 @@ import {
   Info,
   Tag,
   ArrowRight,
-  Filter
+  Filter,
+  ArrowLeft
 } from 'lucide-react';
 
 interface PublicCatalogViewProps {
   catalog: Catalog;
   products: Product[];
+  onBack?: () => void;
 }
 
-const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products }) => {
+const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, onBack }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -49,6 +51,11 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 shrink-0">
+            {onBack && (
+                <button onClick={onBack} className="p-2 mr-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all" title="Voltar ao Painel">
+                    <ArrowLeft size={20} className="text-slate-600" />
+                </button>
+            )}
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
               <ShoppingCart size={18} />
             </div>
@@ -69,10 +76,14 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       </header>
 
       <div className="relative h-64 sm:h-80 overflow-hidden">
-        <img src={catalog.coverImage} alt={catalog.name} className="w-full h-full object-cover" />
+        <img 
+            src={catalog.coverImage || 'https://via.placeholder.com/1200x600?text=Capa+do+Catálogo'} 
+            alt={catalog.name} 
+            className="w-full h-full object-cover" 
+        />
         <div className="absolute inset-0 bg-slate-900/40 flex flex-col items-center justify-center text-center p-6 backdrop-brightness-75">
           <h1 className="text-3xl sm:text-5xl font-black text-white mb-2 drop-shadow-md">{catalog.name}</h1>
-          <p className="text-white/90 max-w-xl text-sm sm:text-base font-medium drop-shadow-sm">{catalog.description}</p>
+          <p className="text-white/90 max-w-xl text-sm sm:text-base font-medium drop-shadow-sm">{catalog.description || 'Confira nossos produtos exclusivos.'}</p>
         </div>
       </div>
 
@@ -132,21 +143,21 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       </main>
 
       {viewingProduct && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row max-h-[90vh] sm:max-h-[80vh] animate-in slide-in-from-bottom-10 duration-500">
-            <div className="w-full sm:w-1/2 bg-slate-100 relative h-72 sm:h-auto">
+            <div className="w-full sm:w-1/2 bg-slate-100 relative h-72 sm:h-auto overflow-hidden">
               <img src={viewingProduct.images[0] || 'https://via.placeholder.com/800'} alt="" className="w-full h-full object-cover" />
               <button 
                 onClick={() => setViewingProduct(null)}
-                className="absolute top-4 left-4 p-2 bg-white/20 backdrop-blur-md rounded-full text-white sm:hidden"
+                className="absolute top-4 left-4 p-2 bg-black/20 backdrop-blur-md rounded-full text-white sm:hidden"
               >
                 <X size={24} />
               </button>
             </div>
 
-            <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto">
+            <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto custom-scrollbar">
               <div className="hidden sm:flex justify-end mb-4">
-                <button onClick={() => setViewingProduct(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => setViewingProduct(null)} className="p-2 bg-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-all">
                   <X size={24} />
                 </button>
               </div>
@@ -166,7 +177,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                     <Info size={14} /> Descrição
                   </h4>
-                  <p className="text-slate-600 leading-relaxed">{viewingProduct.description}</p>
+                  <p className="text-slate-600 leading-relaxed text-sm sm:text-base">{viewingProduct.description || 'Nenhuma descrição detalhada disponível.'}</p>
                 </div>
               </div>
 
@@ -179,7 +190,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
                 <button 
                   onClick={() => handleOrder(viewingProduct)}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-lg transition-all shadow-xl shadow-emerald-100"
+                  className="w-full flex items-center justify-center gap-3 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-lg transition-all shadow-xl shadow-emerald-100 active:scale-95"
                 >
                   <MessageCircle size={24} />
                   Pedir no WhatsApp

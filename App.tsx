@@ -1,4 +1,20 @@
 
+/**
+ * COMANDO SQL PARA O BANCO DE DADOS (Execute no Editor SQL do Supabase):
+ * 
+ * -- Garantir status para Produtos
+ * ALTER TABLE products ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
+ * UPDATE products SET status = 'active' WHERE status IS NULL;
+ * 
+ * -- Garantir status para Clientes
+ * ALTER TABLE customers ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
+ * UPDATE customers SET status = 'active' WHERE status IS NULL;
+ * 
+ * -- Índices para performance
+ * CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+ * CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
@@ -81,6 +97,11 @@ const App: React.FC = () => {
     setQuotations([]);
     setCustomers([]);
     setSidebarOpen(false);
+    setSelectedCatalog(null);
+    setEditingProduct(undefined);
+    setEditingCatalog(null);
+    setEditingQuotation(undefined);
+    setEditingCustomer(undefined);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -97,16 +118,39 @@ const App: React.FC = () => {
         { data: quotData },
         { data: custData }
       ] = await Promise.all([
-        supabase.from('products').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        // BUSCA APENAS PRODUTOS ATIVOS
+        supabase.from('products')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false }),
         supabase.from('categories').select('*, subcategories(*)').eq('user_id', user.id),
         supabase.from('catalogs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('quotations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('customers').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+        // BUSCA APENAS CLIENTES ATIVOS
+        supabase.from('customers')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
       ]);
 
       if (catData) setCategories(catData);
-      if (prodData) setProducts(prodData.map(p => ({ ...p, categoryId: p.category_id, subcategoryId: p.subcategory_id, category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria', createdAt: p.created_at })));
-      if (catalogData) setCatalogs(catalogData.map(c => ({ ...c, productIds: c.product_ids, createdAt: c.created_at })));
+      if (prodData) setProducts(prodData.map(p => ({ 
+        ...p, 
+        categoryId: p.category_id, 
+        subcategoryId: p.subcategory_id, 
+        category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria', 
+        createdAt: p.created_at 
+      })));
+      
+      if (catalogData) setCatalogs(catalogData.map(c => ({ 
+        ...c, 
+        productIds: c.product_ids, 
+        coverImage: c.cover_image,
+        createdAt: c.created_at 
+      })));
+      
       if (quotData) setQuotations(quotData.map(q => ({ ...q, clientName: q.client_name, clientPhone: q.client_phone, sellerName: q.seller_name, quotationDate: q.quotation_date, createdAt: q.created_at })));
       if (custData) setCustomers(custData.map(c => ({ ...c, zipCode: c.zip_code, createdAt: c.created_at })));
     } catch (error) {
@@ -118,14 +162,46 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('catalog_pro_session');
-    if (savedUser) { try { const parsedUser = JSON.parse(savedUser); setUser(parsedUser); setView('dashboard'); } catch (e) { localStorage.removeItem('catalog_pro_session'); } }
+    if (savedUser) { 
+      try { 
+        const parsedUser = JSON.parse(savedUser); 
+        setUser(parsedUser); 
+        setView('dashboard'); 
+      } catch (e) { 
+        localStorage.removeItem('catalog_pro_session'); 
+      } 
+    }
   }, []);
 
   useEffect(() => { if (user) fetchData(); }, [user, fetchData]);
 
-  const handleLogin = (userData: User) => { setUser(userData); localStorage.setItem('catalog_pro_session', JSON.stringify(userData)); setView('dashboard'); };
-  const handleLogout = useCallback(() => { if (window.confirm('Deseja realmente sair do sistema?')) { setIsLoggingOut(true); setTimeout(() => { forceLogout(); setIsLoggingOut(false); }, 600); } }, [forceLogout]);
+  const handleLogin = (userData: User) => { 
+    setUser(userData); 
+    localStorage.setItem('catalog_pro_session', JSON.stringify(userData)); 
+    setView('dashboard'); 
+  };
+
+  const handleLogout = useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    if (window.confirm('Deseja realmente sair do sistema?')) { 
+      setIsLoggingOut(true); 
+      setTimeout(() => { 
+        forceLogout(); 
+        setIsLoggingOut(false); 
+      }, 600); 
+    } 
+  }, [forceLogout]);
+
   const navigateTo = (newView: AppView) => { setView(newView); setSidebarOpen(false); };
+
+  const handleOpenPublicCatalog = (catalog: Catalog) => {
+    setSelectedCatalog(catalog);
+    setView('public-catalog');
+  };
 
   const handleSaveCustomer = async (customer: Partial<Customer>) => {
     if (!user) return;
@@ -140,7 +216,7 @@ const App: React.FC = () => {
       neighborhood: customer.neighborhood,
       city: customer.city,
       state: customer.state,
-      status: customer.status,
+      status: customer.status || 'active',
       notes: customer.notes,
       user_id: user.id
     };
@@ -150,26 +226,121 @@ const App: React.FC = () => {
     else { fetchData(); setView('customers'); }
   };
 
-  const handleSaveProduct = async (p: any) => { /* Mantido igual */ };
-  const handleSaveCatalog = async (c: any) => { /* Mantido igual */ };
-  const handleSaveQuotation = async (q: any) => { /* Mantido igual */ };
+  const handleSaveProduct = async (product: Partial<Product>) => {
+    if (!user) return;
+    const dataToSave: any = {
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      sku: product.sku,
+      stock: product.stock,
+      category_id: product.categoryId || null,
+      subcategory_id: product.subcategoryId || null,
+      images: product.images,
+      tags: product.tags,
+      status: product.status || 'active',
+      user_id: user.id
+    };
+    if (product.id && !isCloning) dataToSave.id = product.id;
+    const { error } = await supabase.from('products').upsert(dataToSave);
+    if (error) alert(`Erro ao salvar produto: ${error.message}`);
+    else { fetchData(); setView('products'); }
+  };
+
+  const handleSaveCatalog = async (catalog: Partial<Catalog>) => {
+    if (!user) return;
+    const dataToSave: any = {
+      name: catalog.name,
+      description: catalog.description,
+      cover_image: catalog.coverImage,
+      product_ids: catalog.productIds,
+      user_id: user.id
+    };
+    if (catalog.id) dataToSave.id = catalog.id;
+    const { error } = await supabase.from('catalogs').upsert(dataToSave);
+    if (error) alert(`Erro ao salvar catálogo: ${error.message}`);
+    else { fetchData(); fetchData(); setEditingCatalog(null); }
+  };
+
+  const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
+    if (!user) return;
+    const dataToSave: any = {
+      client_name: quotation.clientName,
+      client_phone: quotation.clientPhone,
+      seller_name: quotation.sellerName,
+      quotation_date: quotation.quotationDate,
+      keyword: quotation.keyword,
+      total: quotation.total,
+      status: quotation.status,
+      notes: quotation.notes,
+      items: quotation.items,
+      user_id: user.id
+    };
+    if (quotation.id) dataToSave.id = quotation.id;
+    const { error } = await supabase.from('quotations').upsert(dataToSave);
+    if (error) alert(`Erro ao salvar orçamento: ${error.message}`);
+    else { fetchData(); setView('quotations'); }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja desativar este produto?')) {
+      try {
+        const { error } = await supabase
+          .from('products')
+          .update({ status: 'inactive' })
+          .eq('id', id);
+        
+        if (error) {
+          alert(`Erro ao excluir produto: ${error.message}`);
+        } else {
+          setProducts(prev => prev.filter(p => p.id !== id));
+        }
+      } catch (err) {
+        console.error('Erro na deleção lógica de produto:', err);
+        alert('Ocorreu um erro inesperado.');
+      }
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja desativar este cliente?')) {
+      try {
+        const { error } = await supabase
+          .from('customers')
+          .update({ status: 'inactive' })
+          .eq('id', id);
+        
+        if (error) {
+          alert(`Erro ao desativar cliente: ${error.message}`);
+        } else {
+          setCustomers(prev => prev.filter(c => c.id !== id));
+        }
+      } catch (err) {
+        console.error('Erro na deleção lógica de cliente:', err);
+        alert('Ocorreu um erro inesperado.');
+      }
+    }
+  };
 
   if (view === 'public-catalog' && selectedCatalog) {
     const catalogProducts = products.filter(p => selectedCatalog.productIds.includes(p.id));
-    return <PublicCatalogView catalog={selectedCatalog} products={catalogProducts} />;
+    return <PublicCatalogView catalog={selectedCatalog} products={catalogProducts} onBack={() => setView('catalogs')} />;
   }
 
-  if (!user || view === 'login' || view === 'register' || view === 'onboarding') {
+  if ((!user || view === 'login' || view === 'register' || view === 'onboarding') && !isLoggingOut) {
     return <Auth view={view} setView={setView} onLogin={handleLogin} />;
   }
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden relative">
       {isLoggingOut && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-xl flex items-center justify-center animate-in fade-in duration-300">
           <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-6">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-            <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Encerrando sessão</p>
+            <div className="text-center">
+              <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Encerrando sessão</p>
+              <p className="text-xs text-slate-400 font-bold mt-1">Limpando dados seguros...</p>
+            </div>
           </div>
         </div>
       )}
@@ -205,7 +376,14 @@ const App: React.FC = () => {
               <p className="text-xs font-black text-white truncate uppercase tracking-widest">{user?.name}</p>
               <p className="text-[10px] text-slate-500 truncate font-bold uppercase">{user?.email}</p>
             </div>
-            <button type="button" onClick={handleLogout} className="p-3 bg-transparent border-2 border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-400/50 transition-all"><LogOut size={18} /></button>
+            <button 
+              type="button" 
+              onClick={(e) => handleLogout(e)} 
+              className="p-3 bg-slate-800/50 hover:bg-red-600/20 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-400/50 transition-all flex items-center justify-center group"
+              title="Sair do sistema"
+            >
+              <LogOut size={18} className="group-hover:scale-110 transition-transform" />
+            </button>
           </div>
         </div>
       </aside>
@@ -230,15 +408,15 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
           {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} />}
-          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={async (id) => { if (confirm('Excluir cliente?')) { await supabase.from('customers').delete().eq('id', id); fetchData(); } }} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
+          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={handleDeleteCustomer} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
-          {view === 'products' && <ProductList products={products} onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} onDelete={async (id) => { if (confirm('Excluir produto?')) { await supabase.from('products').delete().eq('id', id); fetchData(); } }} onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} />}
+          {view === 'products' && <ProductList products={products} onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} onDelete={handleDeleteProduct} onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} />}
           {view === 'product-form' && <ProductForm initialData={editingProduct} categories={categories} isClone={isCloning} onSave={handleSaveProduct} onCancel={() => setView('products')} />}
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
-          {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={setSelectedCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
+          {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={async (id) => { if (confirm('Excluir orçamento?')) { await supabase.from('quotations').delete().eq('id', id); fetchData(); } }} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
-          {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={handleLogout} />}
+          {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={handleLogout} onRefresh={fetchData} />}
         </div>
       </main>
 

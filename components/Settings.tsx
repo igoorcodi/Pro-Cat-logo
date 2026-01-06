@@ -32,6 +32,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { Product, Category, User, UserPermissions, PermissionLevel } from '../types';
+import { supabase } from '../supabase';
 
 interface SettingsViewProps {
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
@@ -42,6 +43,7 @@ interface SettingsViewProps {
   systemUsers: User[];
   setSystemUsers: React.Dispatch<React.SetStateAction<User[]>>;
   onLogout: () => void;
+  onRefresh?: () => void;
 }
 
 interface AuditLog {
@@ -67,7 +69,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateCurrentUser,
   systemUsers,
   setSystemUsers,
-  onLogout
+  onLogout,
+  onRefresh
 }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
@@ -168,7 +171,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       const text = event.target?.result as string;
       const lines = text.split('\n').filter(l => l.trim() !== '');
       if (lines.length > 0) {
-        const headers = lines[0].split(',').map(h => h.trim());
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
         const rows = lines.slice(1).map(line => line.split(',').map(c => c.trim()));
         setCsvHeaders(headers);
         setCsvRows(rows);
@@ -206,15 +209,55 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleFinalImport = () => {
+  const handleFinalImport = async () => {
+    if (csvRows.length === 0) return;
+    
     setIsImporting(true);
-    // Simular processamento
-    setTimeout(() => {
-      setIsImporting(false);
+    setImportStatus({ type: 'idle', message: 'Iniciando importação...' });
+
+    try {
+      if (currentImportType === 'products') {
+        const productsToInsert = csvRows.map(row => {
+          // Mapeamento baseado no modelo: nome,preço,sku,estoque,categoria,descrição,tags
+          // nome(0), preço(1), sku(2), estoque(3), categoria(4), descrição(5), tags(6)
+          
+          // Tenta encontrar o ID da categoria pelo nome
+          const categoryName = row[4] || '';
+          const categoryObj = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
+
+          return {
+            name: row[0] || 'Sem Nome',
+            price: parseFloat(row[1]) || 0,
+            sku: row[2] || '',
+            stock: parseInt(row[3]) || 0,
+            category_id: categoryObj?.id || null,
+            description: row[5] || '',
+            tags: row[6] ? row[6].split(';') : [],
+            status: 'active',
+            user_id: currentUser.id,
+            images: [] // Imagens não podem ser importadas via CSV simples facilmente
+          };
+        });
+
+        const { error } = await supabase.from('products').insert(productsToInsert);
+
+        if (error) throw error;
+
+        setImportStatus({ type: 'success', message: `${productsToInsert.length} produtos importados com sucesso!` });
+      } else {
+        // Implementação simplificada para Categorias e Subcategorias pode seguir o mesmo padrão
+        setImportStatus({ type: 'error', message: 'Tipo de importação não implementado ainda.' });
+      }
+
+      if (onRefresh) onRefresh();
       setShowMapping(false);
-      setImportStatus({ type: 'success', message: `Importação de ${currentImportType} concluída com sucesso!` });
+    } catch (err: any) {
+      console.error('Erro na importação:', err);
+      setImportStatus({ type: 'error', message: `Erro ao importar: ${err.message}` });
+    } finally {
+      setIsImporting(false);
       setTimeout(() => setImportStatus({ type: 'idle', message: '' }), 5000);
-    }, 2000);
+    }
   };
 
   return (

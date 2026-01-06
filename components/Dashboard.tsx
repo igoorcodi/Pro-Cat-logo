@@ -72,15 +72,15 @@ const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ pro
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <TrendingUp size={18} /> Histórico de Pedidos
             </h3>
           </div>
-          <div className="h-72 flex items-center justify-center">
+          <div className="h-72 w-full relative">
              {products.length > 0 ? (
-               <ResponsiveContainer width="100%" height="100%">
+               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                  <AreaChart data={chartData}>
                    <defs>
                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -98,17 +98,19 @@ const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ pro
                  </AreaChart>
                </ResponsiveContainer>
              ) : (
-               <p className="text-slate-400 text-sm italic">Aguardando dados reais...</p>
+               <div className="h-full w-full flex items-center justify-center">
+                 <p className="text-slate-400 text-sm italic">Aguardando dados reais...</p>
+               </div>
              )}
           </div>
         </div>
 
         {/* Categories Chart */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <h3 className="font-bold text-slate-800 mb-6">Distribuição por Categoria</h3>
-          <div className="h-64 flex items-center justify-center">
+          <div className="h-64 w-full relative">
             {categoryDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <PieChart>
                   <Pie
                     data={categoryDistribution}
@@ -127,7 +129,9 @@ const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ pro
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-slate-400 text-sm italic">Nenhum produto cadastrado</p>
+              <div className="h-full w-full flex items-center justify-center">
+                <p className="text-slate-400 text-sm italic">Nenhum produto cadastrado</p>
+              </div>
             )}
           </div>
           <div className="mt-4 space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
@@ -192,7 +196,7 @@ const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ pro
           <h3 className="font-bold text-slate-800 mb-6">Atividades do Sistema</h3>
           <div className="flex flex-col items-center justify-center h-full py-10 opacity-40">
             <Clock size={40} className="mb-4" />
-            <p className="text-sm font-medium">O histórico de atividades será preenchido automaticamente.</p>
+            <p className="text-sm font-medium text-center">O histórico de atividades será preenchido automaticamente.</p>
           </div>
         </div>
       </div>

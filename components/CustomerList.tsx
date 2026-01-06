@@ -83,10 +83,24 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredCustomers.map(customer => (
-            <div key={customer.id} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
+            <div 
+              key={customer.id} 
+              onClick={() => onEdit(customer)}
+              className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden cursor-pointer"
+            >
               <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                 <button onClick={() => onEdit(customer)} className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-colors"><Edit2 size={18}/></button>
-                 <button onClick={() => onDelete(customer.id)} className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors"><Trash2 size={18}/></button>
+                 <button 
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEdit(customer); }} 
+                  className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-colors"
+                 >
+                   <Edit2 size={18}/>
+                 </button>
+                 <button 
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(customer.id); }} 
+                  className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
+                 >
+                   <Trash2 size={18}/>
+                 </button>
               </div>
 
               <div className="flex items-center gap-5 mb-8">
@@ -118,13 +132,13 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
 
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  onClick={() => handleWhatsApp(customer.phone)}
+                  onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }}
                   className="flex items-center justify-center gap-2 py-3.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
                 >
                   <MessageCircle size={16} /> WhatsApp
                 </button>
                 <button 
-                  onClick={() => onEdit(customer)}
+                  onClick={(e) => { e.stopPropagation(); onEdit(customer); }}
                   className="flex items-center justify-center gap-2 py-3.5 bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
                 >
                   <FileText size={16} /> Detalhes
@@ -147,7 +161,7 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredCustomers.map(customer => (
-                <tr key={customer.id} className="group hover:bg-slate-50/80 transition-all">
+                <tr key={customer.id} onClick={() => onEdit(customer)} className="group hover:bg-slate-50/80 transition-all cursor-pointer">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-black text-sm uppercase">
@@ -172,9 +186,9 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                   </td>
                   <td className="px-8 py-5 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleWhatsApp(customer.phone)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><MessageCircle size={18}/></button>
-                      <button onClick={() => onEdit(customer)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={18}/></button>
-                      <button onClick={() => onDelete(customer.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><MessageCircle size={18}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onEdit(customer); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={18}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(customer.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
                     </div>
                   </td>
                 </tr>
