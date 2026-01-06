@@ -82,6 +82,7 @@ const App: React.FC = () => {
   const [selectedCatalog, setSelectedCatalog] = useState<Catalog | null>(null);
   const [isSharingCatalog, setIsSharingCatalog] = useState<Catalog | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   // States for deletion modal
@@ -181,17 +182,20 @@ const App: React.FC = () => {
     setView('dashboard'); 
   };
 
-  const handleLogout = useCallback((e?: React.MouseEvent) => {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    if (window.confirm('Deseja realmente sair do sistema?')) { 
-      setIsLoggingOut(true); 
-      // Pequeno delay para efeito visual de logout seguro antes de redirecionar
-      setTimeout(() => { 
-        forceLogout(); 
-        setIsLoggingOut(false);
-      }, 1200); 
-    } 
+  const triggerLogout = useCallback(() => {
+    setIsLogoutConfirmationOpen(false);
+    setIsLoggingOut(true); 
+    // Pequeno delay para efeito visual de logout seguro antes de redirecionar
+    setTimeout(() => { 
+      forceLogout(); 
+      setIsLoggingOut(false);
+    }, 1500); 
   }, [forceLogout]);
+
+  const handleLogoutRequest = useCallback((e?: React.MouseEvent) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    setIsLogoutConfirmationOpen(true);
+  }, []);
 
   const navigateTo = (newView: AppView) => { setView(newView); setSidebarOpen(false); };
 
@@ -295,11 +299,9 @@ const App: React.FC = () => {
     setIsDeleting(true);
     try {
       if (type === 'product') {
-        // 1. Mark product as inactive in DB
         const { error: prodError } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
         if (prodError) throw prodError;
 
-        // 2. Unlink from all catalogs in DB (Important for counter accuracy requested by user)
         const catalogsToUpdate = catalogs.filter(c => c.productIds.includes(id));
         if (catalogsToUpdate.length > 0) {
           const updatePromises = catalogsToUpdate.map(async (cat) => {
@@ -309,7 +311,6 @@ const App: React.FC = () => {
           await Promise.all(updatePromises);
         }
 
-        // 3. Update local states immediately for UX
         setProducts(prev => prev.filter(p => p.id !== id));
         setCatalogs(prev => prev.map(c => ({
           ...c,
@@ -368,7 +369,7 @@ const App: React.FC = () => {
                 to { width: 100%; }
             }
             .animate-progress {
-                animation: progress 1.2s linear forwards;
+                animation: progress 1.5s linear forwards;
             }
           `}</style>
         </div>
@@ -406,7 +407,7 @@ const App: React.FC = () => {
             </div>
             <button 
               type="button" 
-              onClick={(e) => handleLogout(e)} 
+              onClick={(e) => handleLogoutRequest(e)} 
               className="p-3 bg-slate-800/50 hover:bg-red-600/20 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-400/50 transition-all flex items-center justify-center group"
             >
               <LogOut size={18} className="group-hover:scale-110 transition-transform" />
@@ -443,14 +444,14 @@ const App: React.FC = () => {
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
-          {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={handleLogout} onRefresh={fetchData} />}
+          {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={handleLogoutRequest} onRefresh={fetchData} />}
         </div>
       </main>
 
       {editingCatalog && <CatalogForm initialData={editingCatalog === 'new' ? undefined : editingCatalog} products={products} onClose={() => setEditingCatalog(null)} onSave={handleSaveCatalog} onDelete={async (id) => { await supabase.from('catalogs').delete().eq('id', id); fetchData(); setEditingCatalog(null); }} />}
       {isSharingCatalog && <ShareCatalogModal catalog={isSharingCatalog} onClose={() => setIsSharingCatalog(null)} />}
       
-      {/* Central Confirmation Modal */}
+      {/* Central Confirmation Modal para Deleções */}
       <ConfirmationModal 
         isOpen={deleteModal.isOpen}
         title={deleteModal.title}
@@ -458,6 +459,18 @@ const App: React.FC = () => {
         onConfirm={processDeletion}
         onCancel={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
         isLoading={isDeleting}
+      />
+
+      {/* Modal de Confirmação de Logout customizado */}
+      <ConfirmationModal 
+        isOpen={isLogoutConfirmationOpen}
+        title="Sair do Sistema"
+        message="Deseja realmente encerrar sua sessão? Suas alterações salvas não serão perdidas."
+        confirmLabel="Confirmar Saída"
+        cancelLabel="Permanecer"
+        onConfirm={triggerLogout}
+        onCancel={() => setIsLogoutConfirmationOpen(false)}
+        variant="info"
       />
     </div>
   );

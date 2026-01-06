@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X, LogOut, Info } from 'lucide-react';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -11,19 +10,23 @@ interface ConfirmationModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  variant?: 'danger' | 'info';
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   isOpen,
   title,
   message,
-  confirmLabel = "Confirmar Exclusão",
+  confirmLabel = "Confirmar",
   cancelLabel = "Cancelar",
   onConfirm,
   onCancel,
-  isLoading = false
+  isLoading = false,
+  variant = 'danger'
 }) => {
   if (!isOpen) return null;
+
+  const isInfo = variant === 'info';
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -32,8 +35,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-8 flex flex-col items-center text-center">
-          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
-            <AlertTriangle size={40} />
+          <div className={`w-20 h-20 ${isInfo ? 'bg-indigo-50 text-indigo-500' : 'bg-red-50 text-red-500'} rounded-3xl flex items-center justify-center mb-6 shadow-inner`}>
+            {isInfo ? <LogOut size={40} /> : <AlertTriangle size={40} />}
           </div>
           
           <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2 uppercase">{title}</h3>
@@ -53,7 +56,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-100 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            className={`flex-1 px-6 py-4 ${isInfo ? 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700' : 'bg-red-600 shadow-red-100 hover:bg-red-700'} text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2`}
           >
             {isLoading ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
