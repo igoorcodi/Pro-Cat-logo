@@ -9,10 +9,6 @@
  * -- Garantir status para Clientes
  * ALTER TABLE customers ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
  * UPDATE customers SET status = 'active' WHERE status IS NULL;
- * 
- * -- Índices para performance
- * CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
- * CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -26,14 +22,13 @@ import {
   Plus, 
   Menu, 
   X, 
-  HelpCircle,
   User as UserIcon,
   Tags,
   FileText,
   Users
 } from 'lucide-react';
 import { supabase } from './supabase';
-import { AppView, User, Product, Catalog, Category, UserPermissions, Quotation, Customer } from './types';
+import { AppView, User, Product, Catalog, Category, Quotation, Customer } from './types';
 import Dashboard from './components/Dashboard';
 import ProductList from './components/ProductList';
 import ProductForm from './components/ProductForm';
@@ -97,11 +92,6 @@ const App: React.FC = () => {
     setQuotations([]);
     setCustomers([]);
     setSidebarOpen(false);
-    setSelectedCatalog(null);
-    setEditingProduct(undefined);
-    setEditingCatalog(null);
-    setEditingQuotation(undefined);
-    setEditingCustomer(undefined);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -118,21 +108,11 @@ const App: React.FC = () => {
         { data: quotData },
         { data: custData }
       ] = await Promise.all([
-        // BUSCA APENAS PRODUTOS ATIVOS
-        supabase.from('products')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: false }),
+        supabase.from('products').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }),
         supabase.from('categories').select('*, subcategories(*)').eq('user_id', user.id),
         supabase.from('catalogs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('quotations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        // BUSCA APENAS CLIENTES ATIVOS
-        supabase.from('customers')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .order('created_at', { ascending: false })
+        supabase.from('customers').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false })
       ]);
 
       if (catData) setCategories(catData);
@@ -161,15 +141,17 @@ const App: React.FC = () => {
   }, [user, forceLogout]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('catalog_pro_session');
-    if (savedUser) { 
-      try { 
-        const parsedUser = JSON.parse(savedUser); 
-        setUser(parsedUser); 
-        setView('dashboard'); 
-      } catch (e) { 
-        localStorage.removeItem('catalog_pro_session'); 
-      } 
+    const session = localStorage.getItem('catalog_pro_session');
+    if (session) {
+      try {
+        const parsed = JSON.parse(session);
+        if (parsed && parsed.id) {
+          setUser(parsed);
+          setView('dashboard');
+        }
+      } catch (e) {
+        localStorage.removeItem('catalog_pro_session');
+      }
     }
   }, []);
 
@@ -182,17 +164,10 @@ const App: React.FC = () => {
   };
 
   const handleLogout = useCallback((e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
+    if (e) { e.preventDefault(); e.stopPropagation(); }
     if (window.confirm('Deseja realmente sair do sistema?')) { 
       setIsLoggingOut(true); 
-      setTimeout(() => { 
-        forceLogout(); 
-        setIsLoggingOut(false); 
-      }, 600); 
+      setTimeout(() => { forceLogout(); setIsLoggingOut(false); }, 600); 
     } 
   }, [forceLogout]);
 
@@ -259,7 +234,7 @@ const App: React.FC = () => {
     if (catalog.id) dataToSave.id = catalog.id;
     const { error } = await supabase.from('catalogs').upsert(dataToSave);
     if (error) alert(`Erro ao salvar catálogo: ${error.message}`);
-    else { fetchData(); fetchData(); setEditingCatalog(null); }
+    else { fetchData(); setEditingCatalog(null); }
   };
 
   const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
@@ -285,40 +260,20 @@ const App: React.FC = () => {
   const handleDeleteProduct = async (id: string) => {
     if (window.confirm('Tem certeza que deseja desativar este produto?')) {
       try {
-        const { error } = await supabase
-          .from('products')
-          .update({ status: 'inactive' })
-          .eq('id', id);
-        
-        if (error) {
-          alert(`Erro ao excluir produto: ${error.message}`);
-        } else {
-          setProducts(prev => prev.filter(p => p.id !== id));
-        }
-      } catch (err) {
-        console.error('Erro na deleção lógica de produto:', err);
-        alert('Ocorreu um erro inesperado.');
-      }
+        const { error } = await supabase.from('products').update({ status: 'inactive' }).eq('id', id);
+        if (error) alert(`Erro ao excluir produto: ${error.message}`);
+        else setProducts(prev => prev.filter(p => p.id !== id));
+      } catch (err) { alert('Ocorreu um erro inesperado.'); }
     }
   };
 
   const handleDeleteCustomer = async (id: string) => {
     if (window.confirm('Tem certeza que deseja desativar este cliente?')) {
       try {
-        const { error } = await supabase
-          .from('customers')
-          .update({ status: 'inactive' })
-          .eq('id', id);
-        
-        if (error) {
-          alert(`Erro ao desativar cliente: ${error.message}`);
-        } else {
-          setCustomers(prev => prev.filter(c => c.id !== id));
-        }
-      } catch (err) {
-        console.error('Erro na deleção lógica de cliente:', err);
-        alert('Ocorreu um erro inesperado.');
-      }
+        const { error } = await supabase.from('customers').update({ status: 'inactive' }).eq('id', id);
+        if (error) alert(`Erro ao desativar cliente: ${error.message}`);
+        else setCustomers(prev => prev.filter(c => c.id !== id));
+      } catch (err) { alert('Ocorreu um erro inesperado.'); }
     }
   };
 
@@ -339,7 +294,6 @@ const App: React.FC = () => {
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
             <div className="text-center">
               <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Encerrando sessão</p>
-              <p className="text-xs text-slate-400 font-bold mt-1">Limpando dados seguros...</p>
             </div>
           </div>
         </div>
@@ -374,13 +328,11 @@ const App: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center"><UserIcon className="text-indigo-400" size={20} /></div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black text-white truncate uppercase tracking-widest">{user?.name}</p>
-              <p className="text-[10px] text-slate-500 truncate font-bold uppercase">{user?.email}</p>
             </div>
             <button 
               type="button" 
               onClick={(e) => handleLogout(e)} 
               className="p-3 bg-slate-800/50 hover:bg-red-600/20 border border-slate-700 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-400/50 transition-all flex items-center justify-center group"
-              title="Sair do sistema"
             >
               <LogOut size={18} className="group-hover:scale-110 transition-transform" />
             </button>
