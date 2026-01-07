@@ -10,18 +10,21 @@ import {
   ArrowRight,
   ArrowLeft,
   Loader2,
-  Package
+  Package,
+  AlertTriangle,
+  Home
 } from 'lucide-react';
 
 interface PublicCatalogViewProps {
-  catalog: Catalog;
+  catalog: Catalog | null;
   products: Product[];
   seller?: { name: string; phone?: string } | null;
   isLoading?: boolean;
+  error?: string | null;
   onBack?: () => void;
 }
 
-const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, seller, isLoading, onBack }) => {
+const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, seller, isLoading, error, onBack }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -43,18 +46,44 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const handleOrder = (product: Product) => {
     const sellerName = seller?.name || 'Vendedor';
     const sellerPhone = seller?.phone?.replace(/\D/g, '') || '';
+    const catalogName = catalog?.name || 'Catálogo Digital';
     
     const message = encodeURIComponent(
-      `Olá, *${sellerName}*! Tenho interesse no produto:\n\n*${product.name}*\nRef (SKU): ${product.sku || 'N/A'}\nPreço: R$ ${product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nVi no catálogo: *${catalog.name}*`
+      `Olá, *${sellerName}*! Tenho interesse no produto:\n\n*${product.name}*\nRef (SKU): ${product.sku || 'N/A'}\nPreço: R$ ${product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nVi no catálogo: *${catalogName}*`
     );
     
-    // Se tiver o telefone do vendedor, envia direto para ele. Caso contrário, abre a tela de compartilhamento geral.
     const url = sellerPhone 
       ? `https://wa.me/${sellerPhone}?text=${message}`
       : `https://wa.me/?text=${message}`;
       
     window.open(url, '_blank');
   };
+
+  // Renderização de Erro (Catálogo não encontrado)
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-xl shadow-red-100/50">
+          <AlertTriangle size={48} />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Ops! Vitrine indisponível.</h1>
+        <p className="text-slate-500 max-w-md mb-10 font-medium leading-relaxed">
+          {error}
+        </p>
+        <button 
+          onClick={() => window.location.href = window.location.origin}
+          className="flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+        >
+          <Home size={20} /> Ir para o Início
+        </button>
+      </div>
+    );
+  }
+
+  // Fallback enquanto ainda não carregou o catálogo base
+  if (!catalog && !isLoading) {
+      return null;
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen pb-24 font-sans selection:bg-indigo-100">
@@ -69,7 +98,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
               <ShoppingCart size={18} />
             </div>
-            <span className="font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{catalog.name}</span>
+            <span className="font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{catalog?.name}</span>
           </div>
 
           <div className="relative flex-1 max-w-md">
@@ -86,7 +115,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       </header>
 
       <div className="relative h-64 sm:h-80 overflow-hidden bg-slate-200">
-        {catalog.coverImage && (
+        {catalog?.coverImage && (
           <img 
               src={catalog.coverImage} 
               alt={catalog.name} 
@@ -94,9 +123,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           />
         )}
         <div className="absolute inset-0 bg-slate-900/40 flex flex-col items-center justify-center text-center p-6 backdrop-brightness-75">
-          <h1 className="text-3xl sm:text-5xl font-black text-white mb-2 drop-shadow-md">{catalog.name}</h1>
+          <h1 className="text-3xl sm:text-5xl font-black text-white mb-2 drop-shadow-md">{catalog?.name}</h1>
           <p className="text-white/90 max-w-xl text-sm sm:text-base font-medium drop-shadow-sm line-clamp-2">
-            {catalog.description || 'Confira nossos produtos exclusivos.'}
+            {catalog?.description || 'Confira nossos produtos exclusivos.'}
           </p>
           {seller && (
             <span className="mt-4 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] text-white font-black uppercase tracking-widest border border-white/20">

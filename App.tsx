@@ -85,6 +85,7 @@ const App: React.FC = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [publicCatalogError, setPublicCatalogError] = useState<string | null>(null);
 
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
@@ -141,17 +142,25 @@ const App: React.FC = () => {
           setView('public-catalog');
           setIsInitializing(false);
           setIsLoadingData(true);
+          setPublicCatalogError(null);
           
           // Tenta buscar primeiro pelo slug amigável, depois pelo ID UUID
+          // Usamos a função or para verificar ambas as colunas
           const { data: catalogData, error: catError } = await supabase
             .from('catalogs')
             .select('*')
-            .or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`)
-            .single();
+            .or(`slug.eq."${publicCatalogId}",id.eq."${publicCatalogId}"`)
+            .maybeSingle();
 
-          if (catError || !catalogData) {
-            console.error("Catálogo não encontrado ou erro:", catError);
-            setView('login');
+          if (catError) {
+            console.error("Erro na busca do catálogo:", catError);
+            setPublicCatalogError("Erro ao conectar com o servidor.");
+            setIsLoadingData(false);
+            return;
+          }
+
+          if (!catalogData) {
+            setPublicCatalogError("O catálogo solicitado não foi encontrado ou o link expirou.");
             setIsLoadingData(false);
             return;
           }
@@ -160,7 +169,7 @@ const App: React.FC = () => {
             .from('users')
             .select('name, phone')
             .eq('id', catalogData.user_id)
-            .single();
+            .maybeSingle();
 
           if (sellerData) {
             setPublicSeller(sellerData);
@@ -207,9 +216,13 @@ const App: React.FC = () => {
           setIsInitializing(false);
         }
       } catch (err) {
-        console.error("Erro na inicialização:", err);
+        console.error("Erro fatal na inicialização:", err);
         setIsInitializing(false);
-        setView('login');
+        if (publicCatalogId) {
+          setPublicCatalogError("Ocorreu um erro inesperado ao carregar a vitrine.");
+        } else {
+          setView('login');
+        }
       }
     };
 
@@ -461,31 +474,32 @@ const App: React.FC = () => {
   }
 
   // Visualização prioritária do catálogo público
+  // Se houver erro ou o catálogo for encontrado, processamos aqui
   if (view === 'public-catalog') {
-    if (isLoadingData && !selectedCatalog) {
+    if (isLoadingData && !selectedCatalog && !publicCatalogError) {
       return (
         <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center gap-6">
           <Loader2 className="animate-spin text-indigo-600" size={40} />
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Buscando catálogo...</p>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Buscando vitrine...</p>
         </div>
       );
     }
 
-    if (selectedCatalog) {
-      return (
-        <PublicCatalogView 
-          catalog={selectedCatalog} 
-          products={publicProducts} 
-          seller={publicSeller}
-          isLoading={isLoadingData}
-          onBack={() => {
-            if (user) setView('catalogs');
-            else setView('login');
-            safeReplaceState(window.location.pathname);
-          }} 
-        />
-      );
-    }
+    // Mesmo que o catálogo seja null, passamos para o PublicCatalogView que mostrará o erro
+    return (
+      <PublicCatalogView 
+        catalog={selectedCatalog as Catalog} 
+        products={publicProducts} 
+        seller={publicSeller}
+        isLoading={isLoadingData}
+        error={publicCatalogError}
+        onBack={() => {
+          if (user) setView('catalogs');
+          else setView('login');
+          safeReplaceState(window.location.pathname);
+        }} 
+      />
+    );
   }
 
   // Visualização de autenticação
