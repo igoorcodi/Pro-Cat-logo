@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { 
   User as UserIcon, 
@@ -29,7 +28,8 @@ import {
   Layers,
   Tags,
   Package,
-  LogOut
+  LogOut,
+  Loader2
 } from 'lucide-react';
 import { Product, Category, User, UserPermissions, PermissionLevel } from '../types';
 import { supabase } from '../supabase';
@@ -75,6 +75,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [activeTab, setActiveTab] = useState('profile');
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [isImporting, setIsImporting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   
   // Profile States
@@ -95,6 +96,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [mapping, setMapping] = useState<MappingState>({});
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
 
   const filteredLogs = useMemo(() => {
     return mockLogs.filter(log => 
@@ -103,6 +105,49 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       log.user.toLowerCase().includes(logSearch.toLowerCase())
     );
   }, [logSearch]);
+
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setIsUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${currentUser.id}-${Math.random()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      // 1. Upload para o Supabase Storage (Bucket 'profiles')
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Pegar URL Pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+      // 3. Atualizar tabela de usuários
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ photo: publicUrl })
+        .eq('id', currentUser.id);
+
+      if (updateError) throw updateError;
+
+      // 4. Atualizar estado local
+      onUpdateCurrentUser({ ...currentUser, photo: publicUrl });
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 3000);
+      
+    } catch (err: any) {
+      console.error('Erro no upload da imagem:', err);
+      alert('Erro ao carregar imagem: ' + err.message);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   const handleSaveProfile = () => {
     if (newPassword && newPassword !== confirmPassword) {
@@ -218,10 +263,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       if (currentImportType === 'products') {
         const productsToInsert = csvRows.map(row => {
-          // Mapeamento baseado no modelo: nome,preço,sku,estoque,categoria,descrição,tags
-          // nome(0), preço(1), sku(2), estoque(3), categoria(4), descrição(5), tags(6)
-          
-          // Tenta encontrar o ID da categoria pelo nome
           const categoryName = row[4] || '';
           const categoryObj = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
 
@@ -235,7 +276,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             tags: row[6] ? row[6].split(';') : [],
             status: 'active',
             user_id: currentUser.id,
-            images: [] // Imagens não podem ser importadas via CSV simples facilmente
+            images: []
           };
         });
 
@@ -245,7 +286,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
         setImportStatus({ type: 'success', message: `${productsToInsert.length} produtos importados com sucesso!` });
       } else {
-        // Implementação simplificada para Categorias e Subcategorias pode seguir o mesmo padrão
         setImportStatus({ type: 'error', message: 'Tipo de importação não implementado ainda.' });
       }
 
@@ -277,10 +317,29 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-6 lg:p-10 space-y-10 animate-in slide-in-from-right-4 duration-500">
             <div className="flex flex-col sm:flex-row items-center gap-8 text-center sm:text-left">
                <div className="relative group">
-                 <div className="w-32 h-32 rounded-[2.5rem] bg-slate-100 border-4 border-white shadow-2xl overflow-hidden">
-                   <img src={`https://picsum.photos/seed/${currentUser.id}/200`} className="w-full h-full object-cover" />
+                 <div className="w-32 h-32 rounded-[2.5rem] bg-slate-100 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center">
+                   {isUploadingImage ? (
+                     <Loader2 className="animate-spin text-indigo-600" size={32} />
+                   ) : (
+                     <img 
+                      src={currentUser.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=random&color=fff`} 
+                      className="w-full h-full object-cover" 
+                      alt="Avatar"
+                     />
+                   )}
                  </div>
-                 <button className="absolute -bottom-2 -right-2 p-3 bg-indigo-600 text-white rounded-2xl shadow-xl hover:bg-indigo-700 transition-all border-4 border-white">
+                 <input 
+                  type="file" 
+                  ref={profileImageInputRef} 
+                  onChange={handleProfileImageUpload} 
+                  accept="image/*" 
+                  className="hidden" 
+                 />
+                 <button 
+                  onClick={() => profileImageInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="absolute -bottom-2 -right-2 p-3 bg-indigo-600 text-white rounded-2xl shadow-xl hover:bg-indigo-700 transition-all border-4 border-white disabled:opacity-50"
+                 >
                    <Upload size={18} />
                  </button>
                </div>
@@ -392,7 +451,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
             {!showMapping ? (
               <div className="space-y-10">
-                {/* Type Selection Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <ImportTypeCard 
                     title="Produtos"
@@ -420,7 +478,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   />
                 </div>
 
-                {/* Upload Area */}
                 <div 
                   onClick={() => fileInputRef.current?.click()}
                   className="group relative border-4 border-dashed border-slate-100 rounded-[3rem] p-16 flex flex-col items-center justify-center gap-6 cursor-pointer hover:border-indigo-200 hover:bg-slate-50/50 transition-all"
@@ -441,18 +498,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                   <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest">
                     <Monitor size={14} /> Importação segura
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 rounded-3xl p-6 border border-amber-100 flex gap-4">
-                  <AlertCircle className="text-amber-600 shrink-0" size={24} />
-                  <div className="space-y-1">
-                    <p className="text-sm font-black text-amber-900 uppercase tracking-tight">Instruções Importantes</p>
-                    <ul className="text-xs text-amber-700 space-y-1 font-medium list-disc pl-4">
-                      <li>Use sempre o modelo baixado para evitar erros de colunas.</li>
-                      <li>Para categorias e subcategorias, nomes duplicados serão ignorados.</li>
-                      <li>Imagens devem ser enviadas posteriormente ou via URL no CSV.</li>
-                    </ul>
                   </div>
                 </div>
               </div>
@@ -507,7 +552,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
-        {/* Users Management Tab */}
         {activeTab === 'users' && (
           <div className="p-6 lg:p-10 space-y-8 flex-1 flex flex-col animate-in slide-in-from-right-4 duration-500">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -528,8 +572,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <div key={u.id} className="bg-slate-50 border border-slate-100 rounded-[2rem] p-6 hover:shadow-xl hover:bg-white transition-all group">
                   <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner">
-                        {u.name[0]}
+                      <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner overflow-hidden">
+                        {u.photo ? <img src={u.photo} className="w-full h-full object-cover" /> : u.name[0]}
                       </div>
                       <div>
                         <h5 className="font-black text-slate-800 text-lg leading-tight">{u.name}</h5>
@@ -570,12 +614,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               ))}
             </div>
-            {systemUsers.length === 0 && (
-              <div className="flex-1 flex flex-col items-center justify-center py-20 opacity-20">
-                <Users size={64} />
-                <p className="mt-4 font-black uppercase tracking-widest">Nenhum usuário cadastrado</p>
-              </div>
-            )}
           </div>
         )}
 
@@ -588,48 +626,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <p className="text-sm text-slate-500 font-medium">Histórico completo de modificações no sistema.</p>
               </div>
             </div>
-            {filteredLogs.length > 0 ? (
-              <div className="border border-slate-100 rounded-[2rem] overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data / Usuário</th>
-                        <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ação</th>
-                        <th className="px-6 py-5 text-right px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {filteredLogs.map(log => (
-                        <tr key={log.id}>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-[10px] font-black">{log.user[0]}</div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800">{log.user}</p>
-                                  <p className="text-[10px] text-slate-400 font-medium">{log.timestamp}</p>
-                                </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm font-medium text-slate-600">{log.action}</p>
-                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{log.module}</p>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${log.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                              {log.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-20 opacity-20">
-                <History size={64} />
-                <p className="mt-4 font-black uppercase tracking-widest">Sem logs registrados</p>
-              </div>
-            )}
+            <div className="flex-1 flex flex-col items-center justify-center py-20 opacity-20">
+              <History size={64} />
+              <p className="mt-4 font-black uppercase tracking-widest">Sem logs registrados</p>
+            </div>
           </div>
         )}
 

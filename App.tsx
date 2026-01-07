@@ -1,13 +1,9 @@
+
 /**
  * COMANDO SQL PARA O BANCO DE DADOS (Execute no Editor SQL do Supabase):
  * 
- * -- Garantir status para Produtos
- * ALTER TABLE products ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
- * UPDATE products SET status = 'active' WHERE status IS NULL;
- * 
- * -- Garantir status para Clientes
- * ALTER TABLE customers ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
- * UPDATE customers SET status = 'active' WHERE status IS NULL;
+ * ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS slug text UNIQUE;
+ * CREATE INDEX IF NOT EXISTS idx_catalogs_slug ON catalogs(slug);
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -26,7 +22,8 @@ import {
   FileText,
   Users,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { supabase } from './supabase';
 import { AppView, User, Product, Catalog, Category, Quotation, Customer } from './types';
@@ -59,16 +56,19 @@ const viewTitles: Record<string, string> = {
   'quotation-form': 'Novo Orçamento',
   'public-catalog': 'Vitrine Digital',
   'customers': 'Meus Clientes',
-  'customer-form': 'Gerenciar Cliente'
+  'customer-form': 'Gerenciar Cliente',
+  'reset-password': 'Redefinir Senha'
 };
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('login');
+  const [isInitializing, setIsInitializing] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   
   const [products, setProducts] = useState<Product[]>([]);
+  const [publicProducts, setPublicProducts] = useState<Product[]>([]);
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -80,12 +80,12 @@ const App: React.FC = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
   const [editingCatalog, setEditingCatalog] = useState<Catalog | null | 'new'>(null);
   const [selectedCatalog, setSelectedCatalog] = useState<Catalog | null>(null);
+  const [publicSeller, setPublicSeller] = useState<{ name: string; phone?: string } | null>(null);
   const [isSharingCatalog, setIsSharingCatalog] = useState<Catalog | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
-  // States for deletion modal
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
     type: 'product' | 'customer' | 'quotation';
@@ -101,16 +101,115 @@ const App: React.FC = () => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const safeReplaceState = (url: string) => {
+    try {
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    } catch (e) {
+      console.warn('Falha ao atualizar URL:', e);
+    }
+  };
+
   const forceLogout = useCallback(() => {
     localStorage.removeItem('catalog_pro_session');
     setUser(null);
     setView('login');
     setProducts([]);
+    setPublicProducts([]);
     setCatalogs([]);
     setCategories([]);
     setQuotations([]);
     setCustomers([]);
     setSidebarOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const publicCatalogId = params.get('c');
+    const isRecovery = hashParams.get('type') === 'recovery' || params.get('type') === 'recovery';
+    
+    const initialize = async () => {
+      try {
+        if (isRecovery) {
+          setView('reset-password');
+          setIsInitializing(false);
+          return;
+        }
+
+        if (publicCatalogId) {
+          setView('public-catalog');
+          setIsInitializing(false);
+          setIsLoadingData(true);
+          
+          // Tenta buscar primeiro pelo slug amigável, depois pelo ID UUID
+          const { data: catalogData, error: catError } = await supabase
+            .from('catalogs')
+            .select('*')
+            .or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`)
+            .single();
+
+          if (catError || !catalogData) throw new Error("Catálogo não encontrado");
+
+          const { data: sellerData } = await supabase
+            .from('users')
+            .select('name, phone')
+            .eq('id', catalogData.user_id)
+            .single();
+
+          if (sellerData) {
+            setPublicSeller(sellerData);
+          }
+
+          const productIds = catalogData.product_ids || [];
+          if (productIds.length > 0) {
+            const { data: prodData } = await supabase
+              .from('products')
+              .select('*')
+              .in('id', productIds)
+              .eq('status', 'active');
+            
+            if (prodData) {
+              setPublicProducts(prodData.map(p => ({ ...p, createdAt: p.created_at })));
+            }
+          }
+
+          setSelectedCatalog({
+            ...catalogData,
+            slug: catalogData.slug,
+            productIds: catalogData.product_ids || [],
+            coverImage: catalogData.cover_image,
+            publicUrl: catalogData.public_url,
+            createdAt: catalogData.created_at
+          });
+        } else {
+          const session = localStorage.getItem('catalog_pro_session');
+          if (session) {
+            try {
+              const parsed = JSON.parse(session);
+              if (parsed && parsed.id) {
+                setUser(parsed);
+                setView('dashboard');
+              }
+            } catch (e) {
+              localStorage.removeItem('catalog_pro_session');
+              setView('login');
+            }
+          } else {
+            setView('login');
+          }
+          setIsInitializing(false);
+        }
+      } catch (err) {
+        console.error("Erro na inicialização:", err);
+        setIsInitializing(false);
+        setView('login');
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    initialize();
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -145,8 +244,10 @@ const App: React.FC = () => {
       
       if (catalogData) setCatalogs(catalogData.map(c => ({ 
         ...c, 
+        slug: c.slug,
         productIds: c.product_ids || [], 
         coverImage: c.cover_image,
+        publicUrl: c.public_url,
         createdAt: c.created_at 
       })));
       
@@ -159,21 +260,6 @@ const App: React.FC = () => {
     }
   }, [user, forceLogout]);
 
-  useEffect(() => {
-    const session = localStorage.getItem('catalog_pro_session');
-    if (session) {
-      try {
-        const parsed = JSON.parse(session);
-        if (parsed && parsed.id) {
-          setUser(parsed);
-          setView('dashboard');
-        }
-      } catch (e) {
-        localStorage.removeItem('catalog_pro_session');
-      }
-    }
-  }, []);
-
   useEffect(() => { if (user) fetchData(); }, [user, fetchData]);
 
   const handleLogin = (userData: User) => { 
@@ -185,7 +271,6 @@ const App: React.FC = () => {
   const triggerLogout = useCallback(() => {
     setIsLogoutConfirmationOpen(false);
     setIsLoggingOut(true); 
-    // Pequeno delay para efeito visual de logout seguro antes de redirecionar
     setTimeout(() => { 
       forceLogout(); 
       setIsLoggingOut(false);
@@ -201,6 +286,10 @@ const App: React.FC = () => {
 
   const handleOpenPublicCatalog = (catalog: Catalog) => {
     setSelectedCatalog(catalog);
+    setPublicProducts(products.filter(p => catalog.productIds.includes(p.id)));
+    if (user) {
+        setPublicSeller({ name: user.name, phone: user.phone });
+    }
     setView('public-catalog');
   };
 
@@ -250,17 +339,37 @@ const App: React.FC = () => {
 
   const handleSaveCatalog = async (catalog: Partial<Catalog>) => {
     if (!user) return;
+    
+    // O slug amigável é usado para gerar a URL pública
+    const slugToUse = catalog.slug || (catalog.id ? catalog.id.substring(0, 8) : null);
+    const generatedUrl = slugToUse 
+      ? `${window.location.origin}${window.location.pathname}?c=${slugToUse}` 
+      : null;
+
     const dataToSave: any = {
       name: catalog.name,
+      slug: catalog.slug,
       description: catalog.description,
       cover_image: catalog.coverImage,
       product_ids: catalog.productIds,
+      public_url: generatedUrl,
       user_id: user.id
     };
+
     if (catalog.id) dataToSave.id = catalog.id;
-    const { error } = await supabase.from('catalogs').upsert(dataToSave);
-    if (error) alert(`Erro ao salvar catálogo: ${error.message}`);
-    else { fetchData(); setEditingCatalog(null); }
+    
+    const { data, error } = await supabase.from('catalogs').upsert(dataToSave).select();
+    
+    if (error) {
+      if (error.code === '23505') {
+        alert('Este ID de link já está em uso. Por favor, escolha outro.');
+      } else {
+        alert(`Erro ao salvar catálogo: ${error.message}`);
+      }
+    } else {
+      fetchData(); 
+      setEditingCatalog(null); 
+    }
   };
 
   const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
@@ -283,7 +392,6 @@ const App: React.FC = () => {
     else { fetchData(); setView('quotations'); }
   };
 
-  // Centralized Deletion Logic
   const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation', id: string, name: string) => {
     setDeleteModal({
       isOpen: true,
@@ -334,21 +442,45 @@ const App: React.FC = () => {
     }
   };
 
-  if (view === 'public-catalog' && selectedCatalog) {
-    const catalogProducts = products.filter(p => selectedCatalog.productIds.includes(p.id));
-    return <PublicCatalogView catalog={selectedCatalog} products={catalogProducts} onBack={() => setView('catalogs')} />;
+  if (isInitializing) {
+    return (
+      <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center gap-6">
+        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl animate-pulse">
+          <Package size={32} />
+        </div>
+        <div className="flex items-center gap-2">
+          <Loader2 className="animate-spin text-indigo-600" size={20} />
+          <span className="text-slate-500 font-bold uppercase tracking-widest text-xs">Preparando sua experiência...</span>
+        </div>
+      </div>
+    );
   }
 
-  if ((!user || view === 'login' || view === 'register' || view === 'onboarding') && !isLoggingOut) {
+  if (view === 'public-catalog' && selectedCatalog) {
+    return (
+      <PublicCatalogView 
+        catalog={selectedCatalog} 
+        products={publicProducts} 
+        seller={publicSeller}
+        isLoading={isLoadingData}
+        onBack={() => {
+          if (user) setView('catalogs');
+          else setView('login');
+          safeReplaceState(window.location.pathname);
+        }} 
+      />
+    );
+  }
+
+  if ((!user || ['login', 'register', 'onboarding', 'reset-password'].includes(view)) && !isLoggingOut) {
     return <Auth view={view} setView={setView} onLogin={handleLogin} />;
   }
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden relative">
-      {/* Logout Overlay Screen - Requisito do Usuário */}
       {isLoggingOut && (
         <div className="fixed inset-0 z-[999] bg-slate-950/90 backdrop-blur-2xl flex items-center justify-center animate-in fade-in duration-500">
-          <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl flex flex-col items-center gap-8 border border-slate-100/50 max-w-sm w-full mx-4">
+          <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl flex flex-col items-center gap-8 border border-slate-100/50 max-sm w-full mx-4">
             <div className="relative">
               <div className="w-24 h-24 border-8 border-indigo-600 border-t-transparent rounded-full animate-spin" />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -359,19 +491,7 @@ const App: React.FC = () => {
               <p className="font-black text-slate-800 uppercase tracking-widest text-lg">Encerrando sessão</p>
               <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Obrigado por utilizar o Pro Catálogo!</p>
             </div>
-            <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-600 animate-progress" />
-            </div>
           </div>
-          <style>{`
-            @keyframes progress {
-                from { width: 0%; }
-                to { width: 100%; }
-            }
-            .animate-progress {
-                animation: progress 1.5s linear forwards;
-            }
-          `}</style>
         </div>
       )}
 
@@ -451,7 +571,6 @@ const App: React.FC = () => {
       {editingCatalog && <CatalogForm initialData={editingCatalog === 'new' ? undefined : editingCatalog} products={products} onClose={() => setEditingCatalog(null)} onSave={handleSaveCatalog} onDelete={async (id) => { await supabase.from('catalogs').delete().eq('id', id); fetchData(); setEditingCatalog(null); }} />}
       {isSharingCatalog && <ShareCatalogModal catalog={isSharingCatalog} onClose={() => setIsSharingCatalog(null)} />}
       
-      {/* Central Confirmation Modal para Deleções */}
       <ConfirmationModal 
         isOpen={deleteModal.isOpen}
         title={deleteModal.title}
@@ -461,7 +580,6 @@ const App: React.FC = () => {
         isLoading={isDeleting}
       />
 
-      {/* Modal de Confirmação de Logout customizado */}
       <ConfirmationModal 
         isOpen={isLogoutConfirmationOpen}
         title="Sair do Sistema"

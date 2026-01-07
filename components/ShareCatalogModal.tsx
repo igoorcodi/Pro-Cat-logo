@@ -51,7 +51,20 @@ const ShareCatalogModal: React.FC<ShareCatalogModalProps> = ({ catalog, onClose 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(catalogTemplates[0].id);
   const [customMessage, setCustomMessage] = useState(catalogTemplates[0].content);
   
-  const catalogUrl = window.location.origin + `/c/${catalog.id}`;
+  // O link agora prioriza o SLUG (ID personalizado), se houver.
+  const getCatalogUrl = () => {
+    const identifier = catalog.slug || catalog.id;
+    
+    try {
+      const url = new URL(window.location.origin + window.location.pathname);
+      url.searchParams.set('c', identifier);
+      return url.toString();
+    } catch (e) {
+      return `${window.location.origin}${window.location.pathname}?c=${identifier}`;
+    }
+  };
+
+  const catalogUrl = getCatalogUrl();
 
   useEffect(() => {
     const template = catalogTemplates.find(t => t.id === selectedTemplateId);
@@ -97,7 +110,6 @@ const ShareCatalogModal: React.FC<ShareCatalogModalProps> = ({ catalog, onClose 
         </div>
 
         <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Coluna da Esquerda: Seleção de Estilo */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 space-y-4">
               <div className="flex items-center gap-3">
@@ -154,7 +166,6 @@ const ShareCatalogModal: React.FC<ShareCatalogModalProps> = ({ catalog, onClose 
             </div>
           </div>
 
-          {/* Coluna da Direita: Editor de Mensagem */}
           <div className="lg:col-span-7 space-y-6 flex flex-col">
             <div className="space-y-2 flex-1 flex flex-col">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">

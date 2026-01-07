@@ -3,6 +3,7 @@ export type UserStatus = 'active' | 'inactive';
 export type ProductStatus = 'active' | 'inactive' | 'archived';
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'admin';
 export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered';
+export type UserRole = 'admin' | 'editor' | 'viewer';
 export type CustomerStatus = 'active' | 'inactive';
 
 export interface UserPermissions {
@@ -19,8 +20,9 @@ export interface User {
   name: string;
   email: string;
   password?: string;
+  phone?: string;
   photo?: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: UserRole;
   status: UserStatus;
   permissions: UserPermissions;
 }
@@ -95,13 +97,15 @@ export interface Quotation {
 export interface Catalog {
   id: string;
   name: string;
+  slug?: string; // Novo campo para ID do link amigável
   description: string;
   coverImage: string;
   productIds: string[];
+  publicUrl?: string;
+  user_id?: string;
   createdAt: string;
 }
 
-// Added MessageTemplate to fix the import error in components/WhatsAppModal.tsx
 export interface MessageTemplate {
   id: string;
   name: string;
@@ -125,4 +129,5 @@ export type AppView =
   | 'quotations'
   | 'quotation-form'
   | 'customers'
-  | 'customer-form';
+  | 'customer-form'
+  | 'reset-password';

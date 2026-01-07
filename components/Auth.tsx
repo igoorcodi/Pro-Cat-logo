@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { AppView, User } from '../types';
-import { Package, Mail, Lock, User as UserIcon, ArrowRight, Github, AlertCircle, CheckCircle2 } from 'lucide-react';
+// Fixed: Added Loader2 to lucide-react imports
+import { Package, Mail, Lock, User as UserIcon, ArrowRight, AlertCircle, CheckCircle2, ChevronLeft, ShieldCheck, KeyRound, Loader2 } from 'lucide-react';
 import { supabase } from '../supabase';
 
 interface AuthProps {
@@ -14,14 +15,88 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   const handleSwitchView = (newView: AppView) => {
     setErrorMessage('');
     setSuccessMessage('');
+    setIsForgotPassword(false);
     setView(newView);
+  };
+
+  const validateEmail = (email: string) => {
+    return String(email)
+      .toLowerCase()
+      .match(
+        /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+      );
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateEmail(email)) {
+      setErrorMessage('Por favor, insira um e-mail válido.');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/?type=recovery`,
+      });
+
+      if (error) {
+        setErrorMessage(error.message || 'Erro ao enviar e-mail de recuperação.');
+      } else {
+        setSuccessMessage('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+        setEmail('');
+      }
+    } catch (err) {
+      setErrorMessage('Erro ao processar solicitação.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('As senhas não coincidem.');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+
+      if (error) {
+        setErrorMessage(error.message || 'Erro ao atualizar senha.');
+      } else {
+        setSuccessMessage('Senha atualizada com sucesso! Você já pode entrar.');
+        setTimeout(() => {
+          setView('login');
+          setSuccessMessage('');
+        }, 2000);
+      }
+    } catch (err) {
+      setErrorMessage('Erro ao atualizar senha.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,10 +114,9 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
         });
 
         if (registerError) {
-          console.error('Erro no registro:', registerError);
           setErrorMessage(registerError.message.includes('unique_email') 
             ? 'Este e-mail já está sendo usado.' 
-            : 'Erro ao criar conta. Certifique-se de que executou o SQL das funções no Supabase.');
+            : 'Erro ao criar conta.');
           setIsLoading(false);
           return;
         }
@@ -56,10 +130,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
             setView('login');
             setSuccessMessage('');
           }, 3000);
-        } else {
-          setErrorMessage('Erro inesperado ao criar usuário.');
         }
-
       } else {
         const { data, error } = await supabase.rpc('login_user', {
           email_input: email.trim(),
@@ -67,7 +138,6 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
         });
 
         if (error) {
-          console.error('Erro na RPC de Login:', error);
           setErrorMessage('Erro interno no servidor de autenticação.');
           setIsLoading(false);
           return;
@@ -80,18 +150,15 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
         }
 
         const userData = data[0];
-
         if (userData.status !== 'active') {
-          setErrorMessage('Este usuário está desativado pelo administrador.');
+          setErrorMessage('Este usuário está desativado.');
           setIsLoading(false);
           return;
         }
 
         onLogin(userData as User);
       }
-      
     } catch (err) {
-      console.error('Erro de conexão:', err);
       setErrorMessage('Erro de conexão com o banco de dados.');
     } finally {
       setIsLoading(false);
@@ -124,6 +191,57 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
     );
   }
 
+  // View de Redefinição de Senha (quando o usuário clica no link do e-mail)
+  if (view === 'reset-password') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50" />
+        <div className="w-full max-w-md space-y-8 relative z-10 animate-in slide-in-from-bottom-8 duration-700">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-indigo-200">
+              <KeyRound size={32} />
+            </div>
+            <h2 className="text-3xl font-black text-black tracking-tight">Nova Senha</h2>
+            <p className="mt-2 text-black font-bold">Crie uma senha segura para sua conta.</p>
+          </div>
+          <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200 border border-slate-100">
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-6">
+              {errorMessage && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
+                  <AlertCircle size={20} />
+                  <span className="text-sm font-bold">{errorMessage}</span>
+                </div>
+              )}
+              {successMessage && (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 animate-in zoom-in duration-300">
+                  <CheckCircle2 size={20} />
+                  <span className="text-sm font-bold">{successMessage}</span>
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-black uppercase tracking-widest px-1">Nova Senha</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-black uppercase tracking-widest px-1">Confirmar Senha</label>
+                <div className="relative group">
+                  <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input required type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repita a nova senha" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black" />
+                </div>
+              </div>
+              <button type="submit" disabled={isLoading} className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-70">
+                {isLoading ? <Loader2 size={24} className="animate-spin" /> : 'Atualizar Senha'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 overflow-hidden relative">
       <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50" />
@@ -135,117 +253,152 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
             <Package size={32} />
           </div>
           <h2 className="text-3xl font-black text-black tracking-tight">
-            {view === 'login' ? 'Bom te ver de novo!' : 'Crie sua conta grátis'}
+            {isForgotPassword ? 'Recuperar Senha' : view === 'login' ? 'Bom te ver de novo!' : 'Crie sua conta grátis'}
           </h2>
-          <p className="mt-2 text-black font-bold">Acesso seguro à sua vitrine.</p>
+          <p className="mt-2 text-black font-bold">
+            {isForgotPassword ? 'Insira seu e-mail para receber um link.' : 'Acesso seguro à sua vitrine.'}
+          </p>
         </div>
 
         <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200 border border-slate-100">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {errorMessage && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
-                <AlertCircle size={20} />
-                <span className="text-sm font-bold">{errorMessage}</span>
-              </div>
-            )}
+          {isForgotPassword ? (
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-6">
+               {errorMessage && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
+                  <AlertCircle size={20} />
+                  <span className="text-sm font-bold">{errorMessage}</span>
+                </div>
+              )}
 
-            {successMessage && (
-              <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 animate-in zoom-in duration-300">
-                <CheckCircle2 size={20} />
-                <span className="text-sm font-bold">{successMessage}</span>
-              </div>
-            )}
+              {successMessage && (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 animate-in zoom-in duration-300">
+                  <CheckCircle2 size={20} />
+                  <span className="text-sm font-bold">{successMessage}</span>
+                </div>
+              )}
 
-            {view === 'register' && (
               <div className="space-y-2">
-                <label className="text-xs font-black text-black uppercase tracking-widest px-1">Seu Nome</label>
+                <label className="text-xs font-black text-black uppercase tracking-widest px-1">E-mail Cadastrado</label>
                 <div className="relative group">
-                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
                   <input 
                     required
-                    type="text" 
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="João Silva"
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
                     className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
                   />
                 </div>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <label className="text-xs font-black text-black uppercase tracking-widest px-1">E-mail</label>
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                <input 
-                  required
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
-                />
-              </div>
-            </div>
+              <button 
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-70"
+              >
+                {isLoading ? <Loader2 size={24} className="animate-spin" /> : 'Enviar Link de Recuperação'}
+              </button>
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-xs font-black text-black uppercase tracking-widest">Senha</label>
-                {view === 'login' && <button type="button" className="text-xs font-black text-indigo-600 hover:underline">Esqueceu?</button>}
-              </div>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                <input 
-                  required
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
-                />
-              </div>
-            </div>
-
-            <button 
-              type="submit"
-              disabled={isLoading || successMessage !== ''}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-70"
-            >
-              {isLoading ? (
-                <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  {view === 'login' ? 'Acessar Sistema' : 'Criar Conta Segura'}
-                  <ArrowRight size={20} />
-                </>
+              <button 
+                type="button" 
+                onClick={() => setIsForgotPassword(false)}
+                className="w-full flex items-center justify-center gap-2 text-slate-400 font-black text-xs uppercase hover:text-indigo-600 transition-colors"
+              >
+                <ChevronLeft size={16} /> Voltar para o Login
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {errorMessage && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
+                  <AlertCircle size={20} />
+                  <span className="text-sm font-bold">{errorMessage}</span>
+                </div>
               )}
-            </button>
-          </form>
 
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-4 text-black font-black tracking-widest">OU</span></div>
-          </div>
+              {successMessage && (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-600 animate-in zoom-in duration-300">
+                  <CheckCircle2 size={20} />
+                  <span className="text-sm font-bold">{successMessage}</span>
+                </div>
+              )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <button className="flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-black hover:bg-slate-50 transition-all">
-              <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
-              Google
-            </button>
-            <button className="flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-black hover:bg-slate-50 transition-all">
-              <Github size={18} className="text-black" />
-              GitHub
-            </button>
-          </div>
+              {view === 'register' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-black uppercase tracking-widest px-1">Seu Nome</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                    <input 
+                      required
+                      type="text" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="João Silva"
+                      className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-black uppercase tracking-widest px-1">E-mail</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input 
+                    required
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-xs font-black text-black uppercase tracking-widest">Senha</label>
+                  {view === 'login' && <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs font-black text-indigo-600 hover:underline">Esqueceu?</button>}
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input 
+                    required
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50/50 focus:border-indigo-500 transition-all outline-none font-bold text-black"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={isLoading || successMessage !== ''}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-70"
+              >
+                {isLoading ? <Loader2 size={24} className="animate-spin" /> : (
+                  <>
+                    {view === 'login' ? 'Acessar Sistema' : 'Criar Conta Segura'}
+                    <ArrowRight size={20} />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
         </div>
 
-        <p className="text-center text-black font-bold">
-          {view === 'login' ? (
-            <>Novo por aqui? <button onClick={() => handleSwitchView('register')} className="text-indigo-600 font-black hover:underline">Cadastre-se</button></>
-          ) : (
-            <>Já é cadastrado? <button onClick={() => handleSwitchView('login')} className="text-indigo-600 font-black hover:underline">Entrar</button></>
-          )}
-        </p>
+        {!isForgotPassword && (
+          <p className="text-center text-black font-bold">
+            {view === 'login' ? (
+              <>Novo por aqui? <button onClick={() => handleSwitchView('register')} className="text-indigo-600 font-black hover:underline">Cadastre-se</button></>
+            ) : (
+              <>Já é cadastrado? <button onClick={() => handleSwitchView('login')} className="text-indigo-600 font-black hover:underline">Entrar</button></>
+            )}
+          </p>
+        )}
       </div>
     </div>
   );

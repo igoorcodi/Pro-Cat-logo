@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload, AlertCircle, FileImage } from 'lucide-react';
+import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload, AlertCircle, FileImage, Link as LinkIcon } from 'lucide-react';
 import { Catalog, Product } from '../types';
 
 interface CatalogFormProps {
@@ -14,6 +14,7 @@ interface CatalogFormProps {
 const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Partial<Catalog>>(initialData || {
     name: '',
+    slug: '',
     description: '',
     coverImage: '',
     productIds: [],
@@ -44,7 +45,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validar tipo de arquivo no lado do cliente
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
       alert("Por favor, selecione apenas imagens nos formatos JPG ou PNG.");
@@ -73,6 +73,12 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
       alert("Por favor, selecione uma imagem de capa (JPG ou PNG).");
       return;
     }
+    
+    // Limpeza simples do slug: remove espaços e caracteres especiais
+    if (formData.slug) {
+        formData.slug = formData.slug.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    }
+    
     onSave(formData);
   };
 
@@ -97,6 +103,26 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
           <div className="w-full lg:w-1/2 p-6 lg:p-10 overflow-y-auto border-r border-slate-100 custom-scrollbar">
             <form id="catalog-form" onSubmit={handleSubmit} className="space-y-8">
+              
+              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-2">
+                <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <LinkIcon size={14} /> ID Personalizado (Link)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-2 bg-indigo-100/50 border border-indigo-200 rounded-xl text-[10px] font-black text-indigo-400 whitespace-nowrap">
+                    .../?c=
+                  </div>
+                  <input 
+                    type="text"
+                    value={formData.slug}
+                    onChange={e => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                    placeholder="ex: minha-loja-2025"
+                    className="flex-1 px-4 py-2 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-indigo-600 focus:ring-4 focus:ring-indigo-100 outline-none transition-all"
+                  />
+                </div>
+                <p className="text-[9px] text-indigo-300 font-bold uppercase tracking-tight">Este ID será usado no link compartilhado para seus clientes.</p>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Catálogo*</label>
                 <input 

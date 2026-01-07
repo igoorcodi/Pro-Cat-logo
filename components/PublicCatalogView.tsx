@@ -2,25 +2,26 @@
 import React, { useState, useMemo } from 'react';
 import { Catalog, Product } from '../types';
 import { 
-  Smartphone, 
   ShoppingCart, 
   MessageCircle, 
   Search, 
   X, 
   Info,
-  Tag,
   ArrowRight,
-  Filter,
-  ArrowLeft
+  ArrowLeft,
+  Loader2,
+  Package
 } from 'lucide-react';
 
 interface PublicCatalogViewProps {
   catalog: Catalog;
   products: Product[];
+  seller?: { name: string; phone?: string } | null;
+  isLoading?: boolean;
   onBack?: () => void;
 }
 
-const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, onBack }) => {
+const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, seller, isLoading, onBack }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -40,10 +41,19 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   }, [products, searchTerm, selectedCategory]);
 
   const handleOrder = (product: Product) => {
+    const sellerName = seller?.name || 'Vendedor';
+    const sellerPhone = seller?.phone?.replace(/\D/g, '') || '';
+    
     const message = encodeURIComponent(
-      `Olá! Tenho interesse no produto:\n\n*${product.name}*\nRef (SKU): ${product.sku}\nPreço: R$ ${product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nVi no catálogo: ${catalog.name}`
+      `Olá, *${sellerName}*! Tenho interesse no produto:\n\n*${product.name}*\nRef (SKU): ${product.sku || 'N/A'}\nPreço: R$ ${product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nVi no catálogo: *${catalog.name}*`
     );
-    window.open(`https://wa.me/?text=${message}`, '_blank');
+    
+    // Se tiver o telefone do vendedor, envia direto para ele. Caso contrário, abre a tela de compartilhamento geral.
+    const url = sellerPhone 
+      ? `https://wa.me/${sellerPhone}?text=${message}`
+      : `https://wa.me/?text=${message}`;
+      
+    window.open(url, '_blank');
   };
 
   return (
@@ -52,7 +62,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 shrink-0">
             {onBack && (
-                <button onClick={onBack} className="p-2 mr-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all" title="Voltar ao Painel">
+                <button onClick={onBack} className="p-2 mr-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all" title="Voltar">
                     <ArrowLeft size={20} className="text-slate-600" />
                 </button>
             )}
@@ -69,21 +79,30 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               placeholder="Buscar no catálogo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
             />
           </div>
         </div>
       </header>
 
-      <div className="relative h-64 sm:h-80 overflow-hidden">
-        <img 
-            src={catalog.coverImage || 'https://via.placeholder.com/1200x600?text=Capa+do+Catálogo'} 
-            alt={catalog.name} 
-            className="w-full h-full object-cover" 
-        />
+      <div className="relative h-64 sm:h-80 overflow-hidden bg-slate-200">
+        {catalog.coverImage && (
+          <img 
+              src={catalog.coverImage} 
+              alt={catalog.name} 
+              className="w-full h-full object-cover" 
+          />
+        )}
         <div className="absolute inset-0 bg-slate-900/40 flex flex-col items-center justify-center text-center p-6 backdrop-brightness-75">
           <h1 className="text-3xl sm:text-5xl font-black text-white mb-2 drop-shadow-md">{catalog.name}</h1>
-          <p className="text-white/90 max-w-xl text-sm sm:text-base font-medium drop-shadow-sm">{catalog.description || 'Confira nossos produtos exclusivos.'}</p>
+          <p className="text-white/90 max-w-xl text-sm sm:text-base font-medium drop-shadow-sm line-clamp-2">
+            {catalog.description || 'Confira nossos produtos exclusivos.'}
+          </p>
+          {seller && (
+            <span className="mt-4 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] text-white font-black uppercase tracking-widest border border-white/20">
+              Por {seller.name}
+            </span>
+          )}
         </div>
       </div>
 
@@ -106,8 +125,13 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6">
-        {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-8">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Loader2 className="animate-spin mb-4" size={40} />
+            <p className="font-bold text-sm uppercase tracking-widest">Carregando itens...</p>
+          </div>
+        ) : filteredProducts.length > 0 ? (
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-8 animate-in fade-in duration-700">
             {filteredProducts.map(product => (
               <div 
                 key={product.id} 
@@ -115,11 +139,17 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 className="bg-white rounded-2xl sm:rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer border border-slate-100 flex flex-col group"
               >
                 <div className="aspect-square relative overflow-hidden bg-slate-50">
-                  <img 
-                    src={product.images[0] || 'https://via.placeholder.com/400'} 
-                    alt={product.name} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                  />
+                  {product.images?.[0] ? (
+                    <img 
+                      src={product.images[0]} 
+                      alt={product.name} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-200 bg-slate-100">
+                      <Package size={48} />
+                    </div>
+                  )}
                 </div>
                 
                 <div className="p-3 sm:p-5 flex flex-col flex-1">
@@ -137,16 +167,19 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         ) : (
           <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
             <Search size={48} className="mx-auto text-slate-200 mb-4" />
-            <p className="text-slate-500 font-medium">Nenhum produto encontrado.</p>
+            <p className="text-slate-500 font-medium">Nenhum produto encontrado neste filtro.</p>
           </div>
         )}
       </main>
 
       {viewingProduct && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row max-h-[90vh] sm:max-h-[80vh] animate-in slide-in-from-bottom-10 duration-500">
+          <div 
+            className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col sm:flex-row max-h-[90vh] sm:max-h-[80vh] animate-in slide-in-from-bottom-10 duration-500"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-full sm:w-1/2 bg-slate-100 relative h-72 sm:h-auto overflow-hidden">
-              <img src={viewingProduct.images[0] || 'https://via.placeholder.com/800'} alt="" className="w-full h-full object-cover" />
+              <img src={viewingProduct.images?.[0] || 'https://via.placeholder.com/800'} alt="" className="w-full h-full object-cover" />
               <button 
                 onClick={() => setViewingProduct(null)}
                 className="absolute top-4 left-4 p-2 bg-black/20 backdrop-blur-md rounded-full text-white sm:hidden"
@@ -167,7 +200,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   <span className="px-2 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase rounded-md">
                     {viewingProduct.category}
                   </span>
-                  <span className="text-[10px] font-medium text-slate-400">REF: {viewingProduct.sku}</span>
+                  {viewingProduct.sku && <span className="text-[10px] font-medium text-slate-400">REF: {viewingProduct.sku}</span>}
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-800 leading-tight">{viewingProduct.name}</h2>
               </div>
@@ -202,7 +235,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       )}
 
       <footer className="mt-20 py-12 text-center border-t border-slate-200 bg-white">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Catálogo Pro &copy; 2024</p>
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400">
+            <ShoppingCart size={16} />
+          </div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Catálogo Pro &copy; 2025</p>
+        </div>
       </footer>
     </div>
   );
