@@ -149,7 +149,12 @@ const App: React.FC = () => {
             .or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`)
             .single();
 
-          if (catError || !catalogData) throw new Error("Catálogo não encontrado");
+          if (catError || !catalogData) {
+            console.error("Catálogo não encontrado ou erro:", catError);
+            setView('login');
+            setIsLoadingData(false);
+            return;
+          }
 
           const { data: sellerData } = await supabase
             .from('users')
@@ -182,6 +187,7 @@ const App: React.FC = () => {
             publicUrl: catalogData.public_url,
             createdAt: catalogData.created_at
           });
+          setIsLoadingData(false);
         } else {
           const session = localStorage.getItem('catalog_pro_session');
           if (session) {
@@ -204,8 +210,6 @@ const App: React.FC = () => {
         console.error("Erro na inicialização:", err);
         setIsInitializing(false);
         setView('login');
-      } finally {
-        setIsLoadingData(false);
       }
     };
 
@@ -456,26 +460,41 @@ const App: React.FC = () => {
     );
   }
 
-  if (view === 'public-catalog' && selectedCatalog) {
-    return (
-      <PublicCatalogView 
-        catalog={selectedCatalog} 
-        products={publicProducts} 
-        seller={publicSeller}
-        isLoading={isLoadingData}
-        onBack={() => {
-          if (user) setView('catalogs');
-          else setView('login');
-          safeReplaceState(window.location.pathname);
-        }} 
-      />
-    );
+  // Visualização prioritária do catálogo público
+  if (view === 'public-catalog') {
+    if (isLoadingData && !selectedCatalog) {
+      return (
+        <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center gap-6">
+          <Loader2 className="animate-spin text-indigo-600" size={40} />
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Buscando catálogo...</p>
+        </div>
+      );
+    }
+
+    if (selectedCatalog) {
+      return (
+        <PublicCatalogView 
+          catalog={selectedCatalog} 
+          products={publicProducts} 
+          seller={publicSeller}
+          isLoading={isLoadingData}
+          onBack={() => {
+            if (user) setView('catalogs');
+            else setView('login');
+            safeReplaceState(window.location.pathname);
+          }} 
+        />
+      );
+    }
   }
 
-  if ((!user || ['login', 'register', 'onboarding', 'reset-password'].includes(view)) && !isLoggingOut) {
+  // Visualização de autenticação
+  const isAuthView = ['login', 'register', 'onboarding', 'reset-password'].includes(view);
+  if ((!user || isAuthView) && !isLoggingOut) {
     return <Auth view={view} setView={setView} onLogin={handleLogin} />;
   }
 
+  // Layout principal para usuários logados
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden relative">
       {isLoggingOut && (
