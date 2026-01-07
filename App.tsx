@@ -144,18 +144,23 @@ const App: React.FC = () => {
           setIsLoadingData(true);
           setPublicCatalogError(null);
           
-          // Correção do filtro .or: Removemos as aspas extras que podem causar erro de sintaxe no apikey/postgrest
-          const { data: catalogData, error: catError } = await supabase
-            .from('catalogs')
-            .select('*')
-            .or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`)
-            .maybeSingle();
+          // Verifica se o ID é um UUID válido para evitar erros de sintaxe no Postgres ao usar o filtro .or
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicCatalogId);
+          
+          let query = supabase.from('catalogs').select('*');
+          
+          if (isUUID) {
+            query = query.or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`);
+          } else {
+            query = query.eq('slug', publicCatalogId);
+          }
+
+          const { data: catalogData, error: catError } = await query.maybeSingle();
 
           if (catError) {
             console.error("Erro na busca do catálogo:", catError);
-            // Se o erro for de API Key, avisamos explicitamente
-            if (catError.message?.includes('apikey') || catError.code === '401') {
-              setPublicCatalogError("Erro de autenticação com o banco de dados. Verifique sua chave API no arquivo supabase.ts.");
+            if (catError.message?.includes('apikey') || catError.code === '401' || catError.code === 'PGRST301') {
+              setPublicCatalogError("Erro de autenticação com o banco de dados. Verifique sua chave API.");
             } else {
               setPublicCatalogError("Erro ao conectar com o servidor.");
             }

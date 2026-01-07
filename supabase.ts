@@ -2,12 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://uusvorligoaffxbjxskr.supabase.co';
-// IMPORTANTE: Esta chave 'sb_publishable_...' parece ser uma chave de gerenciamento ou temporária.
-// Para o funcionamento do catálogo público, você DEVE usar a "anon public key" (JWT longo iniciando com eyJ...)
-const supabaseKey = 'sb_secret_hCJXu30I5iVIFFdFdTOzCw_efzTI6gB';
-
-if (!supabaseKey || supabaseKey.startsWith('sb_')) {
-  console.warn('⚠️ ALERTA: A chave do Supabase parece ser inválida para uso no cliente (Anon Key). Verifique se você copiou a "anon" public key em Settings > API.');
-}
+// Chave Anon Pública (JWT) fornecida pelo usuário
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c3ZvcmxpZ29hZmZ4Ymp4c2tyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0ODQ4MDUsImV4cCI6MjA4MzA2MDgwNX0.cp2if1KayOXCoD7c4snkkyiWCXuKPW5rmblXYpkFnAI';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
