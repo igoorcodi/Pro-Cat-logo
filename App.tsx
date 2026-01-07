@@ -144,17 +144,21 @@ const App: React.FC = () => {
           setIsLoadingData(true);
           setPublicCatalogError(null);
           
-          // Tenta buscar primeiro pelo slug amigável, depois pelo ID UUID
-          // Usamos a função or para verificar ambas as colunas
+          // Correção do filtro .or: Removemos as aspas extras que podem causar erro de sintaxe no apikey/postgrest
           const { data: catalogData, error: catError } = await supabase
             .from('catalogs')
             .select('*')
-            .or(`slug.eq."${publicCatalogId}",id.eq."${publicCatalogId}"`)
+            .or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`)
             .maybeSingle();
 
           if (catError) {
             console.error("Erro na busca do catálogo:", catError);
-            setPublicCatalogError("Erro ao conectar com o servidor.");
+            // Se o erro for de API Key, avisamos explicitamente
+            if (catError.message?.includes('apikey') || catError.code === '401') {
+              setPublicCatalogError("Erro de autenticação com o banco de dados. Verifique sua chave API no arquivo supabase.ts.");
+            } else {
+              setPublicCatalogError("Erro ao conectar com o servidor.");
+            }
             setIsLoadingData(false);
             return;
           }
@@ -474,7 +478,6 @@ const App: React.FC = () => {
   }
 
   // Visualização prioritária do catálogo público
-  // Se houver erro ou o catálogo for encontrado, processamos aqui
   if (view === 'public-catalog') {
     if (isLoadingData && !selectedCatalog && !publicCatalogError) {
       return (
@@ -485,10 +488,9 @@ const App: React.FC = () => {
       );
     }
 
-    // Mesmo que o catálogo seja null, passamos para o PublicCatalogView que mostrará o erro
     return (
       <PublicCatalogView 
-        catalog={selectedCatalog as Catalog} 
+        catalog={selectedCatalog} 
         products={publicProducts} 
         seller={publicSeller}
         isLoading={isLoadingData}
