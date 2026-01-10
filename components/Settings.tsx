@@ -1,4 +1,5 @@
-import React, { useState, useRef, useMemo } from 'react';
+
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   User as UserIcon, 
   MessageSquare, 
@@ -29,9 +30,17 @@ import {
   Tags,
   Package,
   LogOut,
-  Loader2
+  Loader2,
+  Building2,
+  Globe,
+  Instagram,
+  Phone,
+  Mail,
+  MapPin,
+  CreditCard,
+  Building
 } from 'lucide-react';
-import { Product, Category, User, UserPermissions, PermissionLevel } from '../types';
+import { Product, Category, User, UserPermissions, PermissionLevel, Company } from '../types';
 import { supabase } from '../supabase';
 
 interface SettingsViewProps {
@@ -44,6 +53,8 @@ interface SettingsViewProps {
   setSystemUsers: React.Dispatch<React.SetStateAction<User[]>>;
   onLogout: () => void;
   onRefresh?: () => void;
+  company: Company | null;
+  onSaveCompany: (data: Partial<Company>) => Promise<void>;
 }
 
 interface AuditLog {
@@ -70,7 +81,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   systemUsers,
   setSystemUsers,
   onLogout,
-  onRefresh
+  onRefresh,
+  company,
+  onSaveCompany
 }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
@@ -83,6 +96,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [profileSuccess, setProfileSuccess] = useState(false);
+
+  // Company States
+  const [companyFormData, setCompanyFormData] = useState<Partial<Company>>({});
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
+  const [companySuccess, setCompanySuccess] = useState(false);
+  const companyLogoInputRef = useRef<HTMLInputElement>(null);
 
   // User Management States
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -97,6 +116,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (company) {
+      setCompanyFormData(company);
+    }
+  }, [company]);
 
   const filteredLogs = useMemo(() => {
     return mockLogs.filter(log => 
@@ -116,19 +141,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       const fileName = `${currentUser.id}-${Math.random()}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
-      // 1. Upload para o Supabase Storage (Bucket 'profiles')
       const { error: uploadError } = await supabase.storage
         .from('profiles')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // 2. Pegar URL Pública
       const { data: { publicUrl } } = supabase.storage
         .from('profiles')
         .getPublicUrl(filePath);
 
-      // 3. Atualizar tabela de usuários
       const { error: updateError } = await supabase
         .from('users')
         .update({ photo: publicUrl })
@@ -136,7 +158,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       if (updateError) throw updateError;
 
-      // 4. Atualizar estado local
       onUpdateCurrentUser({ ...currentUser, photo: publicUrl });
       setProfileSuccess(true);
       setTimeout(() => setProfileSuccess(false), 3000);
@@ -146,6 +167,35 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       alert('Erro ao carregar imagem: ' + err.message);
     } finally {
       setIsUploadingImage(false);
+    }
+  };
+
+  const handleCompanyLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setIsSavingCompany(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `company-${currentUser.id}-${Math.random()}.${fileExt}`;
+      const filePath = `logos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+      setCompanyFormData(prev => ({ ...prev, logo_url: publicUrl }));
+      
+    } catch (err: any) {
+      alert('Erro ao carregar logo: ' + err.message);
+    } finally {
+      setIsSavingCompany(false);
     }
   };
 
@@ -166,6 +216,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     setNewPassword('');
     setConfirmPassword('');
     setTimeout(() => setProfileSuccess(false), 3000);
+  };
+
+  const handleCompanySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingCompany(true);
+    try {
+      await onSaveCompany(companyFormData);
+      setCompanySuccess(true);
+      setTimeout(() => setCompanySuccess(false), 3000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingCompany(false);
+    }
   };
 
   const handleOpenUserModal = (user?: User) => {
@@ -305,6 +369,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       <aside className="w-full lg:w-72 space-y-2 overflow-x-auto lg:overflow-visible flex lg:flex-col pb-4 lg:pb-0 scrollbar-hide">
         <h3 className="hidden lg:block text-[10px] font-black text-slate-400 px-4 mb-6 uppercase tracking-widest">Painel de Controle</h3>
         <SettingsTab icon={<UserIcon size={20} />} label="Perfil & Segurança" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
+        <SettingsTab icon={<Building2 size={20} />} label="Empresa" active={activeTab === 'company'} onClick={() => setActiveTab('company')} />
         <SettingsTab icon={<Users size={20} />} label="Usuários do Sistema" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
         <SettingsTab icon={<FileUp size={20} />} label="Importação" active={activeTab === 'import'} onClick={() => setActiveTab('import')} />
         <SettingsTab icon={<History size={20} />} label="Logs & Auditoria" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
@@ -431,6 +496,208 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <LogOut size={20} /> Encerrar Sessão
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Company Tab */}
+        {activeTab === 'company' && (
+          <div className="p-6 lg:p-10 space-y-10 animate-in slide-in-from-right-4 duration-500">
+            <div className="flex flex-col sm:flex-row items-center gap-8 text-center sm:text-left">
+               <div className="relative group">
+                 <div className="w-32 h-32 rounded-full bg-slate-100 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center">
+                   {isSavingCompany ? (
+                     <Loader2 className="animate-spin text-indigo-600" size={32} />
+                   ) : companyFormData.logo_url ? (
+                     <img 
+                      src={companyFormData.logo_url} 
+                      className="w-full h-full object-cover" 
+                      alt="Logo da Empresa"
+                     />
+                   ) : (
+                     <Building2 className="text-slate-300" size={48} />
+                   )}
+                 </div>
+                 <input 
+                  type="file" 
+                  ref={companyLogoInputRef} 
+                  onChange={handleCompanyLogoUpload} 
+                  accept="image/*" 
+                  className="hidden" 
+                 />
+                 <button 
+                  onClick={() => companyLogoInputRef.current?.click()}
+                  className="absolute -bottom-2 -right-2 p-3 bg-indigo-600 text-white rounded-full shadow-xl hover:bg-indigo-700 transition-all border-4 border-white"
+                 >
+                   <Upload size={18} />
+                 </button>
+               </div>
+               <div className="space-y-2">
+                 <h4 className="text-3xl font-black text-slate-800 tracking-tight">Identidade da Empresa</h4>
+                 <p className="text-slate-500 font-medium">Estes dados aparecerão nos seus orçamentos e catálogos.</p>
+               </div>
+            </div>
+
+            <form onSubmit={handleCompanySubmit} className="space-y-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+                {/* Identification */}
+                <div className="space-y-6">
+                  <h5 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <Building2 size={16} className="text-indigo-600" /> Identificação
+                  </h5>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Razão Social*</label>
+                      <input 
+                        required
+                        type="text" 
+                        value={companyFormData.name || ''}
+                        onChange={e => setCompanyFormData({...companyFormData, name: e.target.value})}
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                        placeholder="Ex: Minha Empresa LTDA"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome Fantasia</label>
+                      <input 
+                        type="text" 
+                        value={companyFormData.trading_name || ''}
+                        onChange={e => setCompanyFormData({...companyFormData, trading_name: e.target.value})}
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                        placeholder="Ex: Minha Loja"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">CNPJ / CPF</label>
+                      <div className="relative group">
+                        <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                        <input 
+                          type="text" 
+                          value={companyFormData.document || ''}
+                          onChange={e => setCompanyFormData({...companyFormData, document: e.target.value})}
+                          className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                          placeholder="00.000.000/0000-00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact & Social */}
+                <div className="space-y-6">
+                  <h5 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <MessageSquare size={16} className="text-emerald-600" /> Contato & Social
+                  </h5>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">WhatsApp de Vendas</label>
+                      <div className="relative">
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-400" size={18}/>
+                        <input 
+                          type="text" 
+                          value={companyFormData.whatsapp || ''}
+                          onChange={e => setCompanyFormData({...companyFormData, whatsapp: e.target.value})}
+                          className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                          placeholder="55 11 99999-9999"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Instagram (@)</label>
+                      <div className="relative">
+                        <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 text-pink-500" size={18}/>
+                        <input 
+                          type="text" 
+                          value={companyFormData.instagram || ''}
+                          onChange={e => setCompanyFormData({...companyFormData, instagram: e.target.value})}
+                          className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                          placeholder="minhaloja"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="space-y-6 pt-6 border-t border-slate-100">
+                <h5 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <MapPin size={16} className="text-red-500" /> Endereço Comercial
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                  <div className="md:col-span-3 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">CEP</label>
+                    <input 
+                      type="text" 
+                      value={companyFormData.zip_code || ''}
+                      onChange={e => setCompanyFormData({...companyFormData, zip_code: e.target.value})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-6 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Logradouro</label>
+                    <input 
+                      type="text" 
+                      value={companyFormData.address || ''}
+                      onChange={e => setCompanyFormData({...companyFormData, address: e.target.value})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-3 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Número</label>
+                    <input 
+                      type="text" 
+                      value={companyFormData.number || ''}
+                      onChange={e => setCompanyFormData({...companyFormData, number: e.target.value})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-4 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Bairro</label>
+                    <input 
+                      type="text" 
+                      value={companyFormData.neighborhood || ''}
+                      onChange={e => setCompanyFormData({...companyFormData, neighborhood: e.target.value})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-5 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cidade</label>
+                    <input 
+                      type="text" 
+                      value={companyFormData.city || ''}
+                      onChange={e => setCompanyFormData({...companyFormData, city: e.target.value})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-3 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">UF</label>
+                    <input 
+                      type="text" 
+                      maxLength={2}
+                      value={companyFormData.state || ''}
+                      onChange={e => setCompanyFormData({...companyFormData, state: e.target.value.toUpperCase()})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 pt-10 border-t border-slate-100">
+                <button 
+                  type="submit"
+                  disabled={isSavingCompany}
+                  className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-3 disabled:opacity-50"
+                >
+                  {isSavingCompany ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} 
+                  Salvar Dados da Empresa
+                </button>
+                {companySuccess && (
+                  <span className="text-emerald-600 font-bold text-sm animate-in fade-in slide-in-from-left-2 flex items-center gap-2">
+                    <CheckCircle size={18} /> Dados atualizados!
+                  </span>
+                )}
+              </div>
+            </form>
           </div>
         )}
 

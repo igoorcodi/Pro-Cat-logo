@@ -27,6 +27,26 @@ export interface User {
   permissions: UserPermissions;
 }
 
+export interface Company {
+  id?: string;
+  user_id: string;
+  name: string;
+  trading_name?: string;
+  document?: string;
+  email?: string;
+  phone?: string;
+  whatsapp?: string;
+  instagram?: string;
+  logo_url?: string;
+  zip_code?: string;
+  address?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  createdAt?: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -100,6 +120,7 @@ export interface Catalog {
   slug?: string; // Novo campo para ID do link amigável
   description: string;
   coverImage: string;
+  logoUrl?: string; // Logotipo específico da vitrine
   productIds: string[];
   publicUrl?: string;
   user_id?: string;

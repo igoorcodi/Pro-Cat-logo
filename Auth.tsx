@@ -1,24 +1,4 @@
 
-/**
- * COMANDO SQL PARA O BANCO DE DADOS (Execute no Editor SQL do Supabase):
- * 
- * CREATE OR REPLACE FUNCTION register_user_secure(name_in text, email_in text, pass_in text)
- * RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
- * DECLARE
- *   new_user jsonb;
- * BEGIN
- *   INSERT INTO users (name, email, password, role, status, permissions)
- *   VALUES (name_in, email_in, pass_in, 'admin', 'active', '{
- *     "dashboard": "admin", "products": "admin", "categories": "admin", 
- *     "catalogs": "admin", "reports": "admin", "settings": "admin"
- *   }'::jsonb)
- *   RETURNING jsonb_build_object('id', id, 'name', name, 'email', email, 'role', role, 'status', status) INTO new_user;
- *   
- *   RETURN new_user;
- * END;
- * $$;
- */
-
 import React, { useState } from 'react';
 import { AppView, User } from '../types';
 import { Package, Mail, Lock, User as UserIcon, ArrowRight, AlertCircle, CheckCircle2, ChevronLeft, ShieldCheck, KeyRound, Loader2 } from 'lucide-react';
@@ -39,6 +19,20 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  const formatError = (err: any): string => {
+    if (!err) return '';
+    if (typeof err === 'string') return err;
+    if (err.message && typeof err.message === 'string') return err.message;
+    if (err.details && typeof err.details === 'string') return err.details;
+    if (err.error_description && typeof err.error_description === 'string') return err.error_description;
+    try {
+      const stringified = JSON.stringify(err);
+      return stringified === '{}' ? String(err) : stringified;
+    } catch (e) {
+      return String(err);
+    }
+  };
 
   const handleSwitchView = (newView: AppView) => {
     setErrorMessage('');
@@ -72,7 +66,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
       });
 
       if (error) {
-        setErrorMessage(error.message || 'Erro ao enviar e-mail de recuperação.');
+        setErrorMessage(formatError(error));
       } else {
         setSuccessMessage('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
         setEmail('');
@@ -103,7 +97,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
-        setErrorMessage(error.message || 'Erro ao atualizar senha.');
+        setErrorMessage(formatError(error));
       } else {
         setSuccessMessage('Senha atualizada com sucesso! Você já pode entrar.');
         setTimeout(() => {
@@ -128,38 +122,37 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
     
     try {
       if (view === 'register') {
-        const { data: newUser, error: registerError } = await supabase.rpc('register_user_secure', {
-             name_in: name.trim(),
-             email_in: email.trim(),
-             pass_in: password
-        });
+        const payload = {
+          name_in: name.trim(),
+          email_in: email.trim(),
+          pass_in: password
+        };
+
+        console.log('Iniciando registro RPC:', payload.email_in);
+
+        const { data: newUser, error: registerError } = await supabase.rpc('register_user_secure', payload);
 
         if (registerError) {
-          console.error('Erro de Registro Detalhado:', registerError);
+          console.error('Erro retornado pela RPC:', registerError);
+          const errorMsg = formatError(registerError);
           
-          // Tratamento de erro aprimorado
-          let finalMessage = 'Erro ao criar conta. Tente novamente.';
-          
-          if (registerError.message) {
-            finalMessage = registerError.message;
-          } else if (typeof registerError === 'object') {
-            finalMessage = JSON.stringify(registerError);
+          if (registerError.code === '23505' || errorMsg.toLowerCase().includes('already exists') || errorMsg.toLowerCase().includes('unique')) {
+            setErrorMessage('Este e-mail já está sendo usado por outra conta.');
+          } else {
+            setErrorMessage(errorMsg);
           }
-
-          // Verificação específica de duplicidade (Erro 409 ou código SQL 23505)
-          const errorMsgStr = finalMessage.toLowerCase();
-          if (registerError.code === '23505' || errorMsgStr.includes('unique') || errorMsgStr.includes('already exists')) {
-            finalMessage = 'Este e-mail já está sendo usado por outra conta.';
-          } else if (errorMsgStr.includes('not found') || errorMsgStr.includes('method not allowed')) {
-            finalMessage = 'Erro de configuração no servidor (RPC não encontrada).';
-          }
-
-          setErrorMessage(finalMessage);
           setIsLoading(false);
           return;
         }
 
-        // Se não houve erro, o registro foi um sucesso
+        if (!newUser) {
+          console.warn('RPC retornou sucesso (200) mas dados nulos (data: null). Verifique a função no Postgres.');
+          setErrorMessage('O servidor não confirmou a criação do usuário. Verifique se o e-mail já existe.');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('Usuário registrado com sucesso:', newUser);
         setSuccessMessage('Conta criada com sucesso! Você já pode fazer login.');
         setName('');
         setEmail('');
@@ -177,7 +170,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
 
         if (loginError) {
           console.error('Erro de Login:', loginError);
-          setErrorMessage(loginError.message || 'Erro ao tentar entrar. Verifique sua conexão.');
+          setErrorMessage(formatError(loginError));
           setIsLoading(false);
           return;
         }
@@ -198,8 +191,8 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
         onLogin(userData as User);
       }
     } catch (err: any) {
-      console.error('Erro de Autenticação:', err);
-      setErrorMessage(err.message || 'Erro de conexão com o servidor.');
+      console.error('Exceção capturada no Auth:', err);
+      setErrorMessage(formatError(err) || 'Erro de conexão com o servidor.');
     } finally {
       setIsLoading(false);
     }

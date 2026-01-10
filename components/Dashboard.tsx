@@ -5,7 +5,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell 
 } from 'recharts';
 import { Product, Catalog } from '../types';
-import { Package, BookOpen, AlertCircle, TrendingUp, Clock, Share2 } from 'lucide-react';
+import { Package, BookOpen, AlertCircle, TrendingUp, Clock, Share2, ImageOff } from 'lucide-react';
 
 const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ products, catalogs }) => {
   const lowStock = products.filter(p => p.stock <= 10);
@@ -169,8 +169,19 @@ const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ pro
                     <tr key={product.id}>
                       <td className="py-4">
                         <div className="flex items-center gap-3">
-                          <img src={product.images[0] || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                          <span className="font-medium text-slate-700 truncate max-w-[200px]">{product.name}</span>
+                          {product.images && product.images.length > 0 ? (
+                            <img src={product.images[0]} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-amber-500 border border-amber-100">
+                               <ImageOff size={14} />
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                            <span className="font-medium text-slate-700 truncate max-w-[200px]">{product.name}</span>
+                            {(!product.images || product.images.length === 0) && (
+                              <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest mt-0.5">Sem imagem</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 text-right">
@@ -193,7 +204,7 @@ const Dashboard: React.FC<{ products: Product[]; catalogs: Catalog[] }> = ({ pro
 
         {/* Activity Feed */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="font-bold text-slate-800 mb-6">Atividades do Sistema</h3>
+          <h3 className="font-bold text-slate-800 mb-6">Atividades do Systema</h3>
           <div className="flex flex-col items-center justify-center h-full py-10 opacity-40">
             <Clock size={40} className="mb-4" />
             <p className="text-sm font-medium text-center">O histórico de atividades será preenchido automaticamente.</p>

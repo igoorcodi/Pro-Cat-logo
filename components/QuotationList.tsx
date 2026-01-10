@@ -16,7 +16,8 @@ import {
   Printer,
   Package,
   CheckCircle2,
-  User as UserIcon
+  User as UserIcon,
+  ChevronRight
 } from 'lucide-react';
 import { Quotation, QuotationStatus } from '../types';
 
@@ -217,7 +218,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
             <select 
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 outline-none focus:ring-4 focus:ring-indigo-50 shadow-sm"
+              className="w-full xl:w-auto px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 outline-none focus:ring-4 focus:ring-indigo-50 shadow-sm"
             >
               <option value="all">Todas as situações</option>
               <option value="waiting">Em espera</option>
@@ -228,7 +229,8 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
           </div>
         </div>
 
-        <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+        {/* Tabela Desktop (MD+) */}
+        <div className="hidden md:block bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-100">
@@ -344,11 +346,89 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
           </div>
         </div>
 
+        {/* Lista de Orçamentos Mobile (Cards) */}
+        <div className="md:hidden space-y-4">
+          {filteredQuotations.map(q => {
+            const style = getStatusStyle(q.status);
+            const isSelected = selectedIds.includes(q.id);
+            return (
+              <div 
+                key={q.id}
+                className={`bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm transition-all flex flex-col gap-4 ${isSelected ? 'ring-2 ring-indigo-500' : ''}`}
+                onClick={() => toggleSelect(q.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${style.bg} ${style.text}`}>
+                    {style.icon}
+                    {style.label}
+                  </div>
+                  <span className="font-mono text-[10px] font-black text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                    #{q.id.substr(0, 5).toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <h4 className="font-black text-slate-800 text-base truncate tracking-tight">{q.clientName}</h4>
+                    <p className="text-[11px] text-slate-400 font-bold">{q.clientPhone}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-0.5">Total</p>
+                    <p className="text-lg font-black text-indigo-600 tracking-tighter">
+                      R$ {q.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-[10px] text-slate-400 font-bold border-t border-slate-50 pt-4">
+                  <div className="flex items-center gap-1">
+                    <UserIcon size={12} className="text-indigo-300" /> {q.sellerName}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar size={12} className="text-slate-300" /> {new Date(q.createdAt).toLocaleDateString('pt-BR')}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 pt-2" onClick={e => e.stopPropagation()}>
+                  <button 
+                    onClick={() => handleSendWhatsApp(q)}
+                    className="flex items-center justify-center p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100"
+                    title="WhatsApp"
+                  >
+                    <MessageSquare size={18} />
+                  </button>
+                  <button 
+                    onClick={() => handlePrint(q)}
+                    className="flex items-center justify-center p-3 bg-slate-50 text-slate-600 rounded-2xl"
+                    title="Imprimir"
+                  >
+                    <Printer size={18} />
+                  </button>
+                  <button 
+                    onClick={() => onEdit(q)}
+                    className="flex items-center justify-center p-3 bg-indigo-50 text-indigo-600 rounded-2xl"
+                    title="Editar"
+                  >
+                    <Edit2 size={18} />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(q.id)}
+                    className="flex items-center justify-center p-3 bg-red-50 text-red-600 rounded-2xl"
+                    title="Excluir"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         {filteredQuotations.length === 0 && (
           <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[3rem] border-2 border-dashed border-slate-100 text-slate-400">
             <FileText size={48} className="opacity-20 mb-4" />
-            <p className="text-xl font-black text-slate-800 uppercase tracking-widest">Nenhum orçamento</p>
-            <p className="text-sm font-bold mt-2">Clique em "Novo Orçamento" para começar.</p>
+            <p className="text-xl font-black text-slate-800 uppercase tracking-widest text-center px-4">Nenhum orçamento</p>
+            <p className="text-sm font-bold mt-2 text-center px-4">Clique em "Novo Orçamento" para começar.</p>
           </div>
         )}
       </div>

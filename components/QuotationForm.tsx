@@ -13,7 +13,12 @@ import {
   Info,
   DollarSign,
   Percent,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Clock,
+  Play,
+  CheckCircle,
+  PackageCheck,
+  ImageOff
 } from 'lucide-react';
 import { Product, Quotation, QuotationItem, QuotationStatus } from '../types';
 
@@ -109,6 +114,15 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
     onSave(formData);
   };
 
+  const getStatusColor = (status: QuotationStatus) => {
+    switch (status) {
+      case 'delivered': return 'text-emerald-600 bg-emerald-50 border-emerald-100';
+      case 'finished': return 'text-blue-600 bg-blue-50 border-blue-100';
+      case 'in_progress': return 'text-amber-600 bg-amber-50 border-amber-100';
+      default: return 'text-slate-500 bg-slate-50 border-slate-100';
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto pb-20 animate-in slide-in-from-right-4 duration-500">
       <div className="flex items-center justify-between mb-8">
@@ -127,8 +141,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
             <h3 className="font-black text-lg uppercase tracking-tight">Informações Básicas</h3>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="space-y-2 col-span-1 lg:col-span-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Cliente*</label>
               <input 
                 required
@@ -175,6 +189,39 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                <Tag size={12} className="text-indigo-400" /> Referência / Código
+              </label>
+              <input 
+                type="text" 
+                value={formData.keyword}
+                onChange={e => setFormData(prev => ({ ...prev, keyword: e.target.value }))}
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold uppercase"
+                placeholder="Ex: PED-101"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                <Info size={12} className="text-indigo-400" /> Situação do Orçamento*
+              </label>
+              <div className="relative">
+                <select 
+                  required
+                  value={formData.status}
+                  onChange={e => setFormData(prev => ({ ...prev, status: e.target.value as QuotationStatus }))}
+                  className={`w-full px-5 py-4 border rounded-2xl focus:ring-4 outline-none font-black appearance-none transition-all ${getStatusColor(formData.status as QuotationStatus)}`}
+                >
+                  <option value="waiting">⏳ Em espera</option>
+                  <option value="in_progress">⚙️ Em execução</option>
+                  <option value="finished">✅ Finalizada</option>
+                  <option value="delivered">📦 Entregue</option>
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                   <Clock size={16} />
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -203,7 +250,13 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
                       onClick={() => addItem(p)}
                       className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 text-left transition-all border-b last:border-0 border-slate-50"
                     >
-                      <img src={p.images[0]} className="w-10 h-10 rounded-lg object-cover" />
+                      {p.images && p.images.length > 0 ? (
+                        <img src={p.images[0]} className="w-10 h-10 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                          <ImageOff size={14} />
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm font-bold text-slate-800">{p.name}</p>
                         <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">R$ {p.price.toLocaleString('pt-BR')}</p>
@@ -237,7 +290,32 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
                       />
                     </div>
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Qtd</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      value={item.quantity}
+                      onChange={e => updateItem(item.productId, { quantity: parseInt(e.target.value) || 1 })}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-center"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desconto</label>
+                    <div className="relative">
+                      <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-red-400 font-bold text-[10px]">R$</div>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        min="0"
+                        value={item.discount}
+                        onChange={e => updateItem(item.productId, { discount: parseFloat(e.target.value) || 0 })}
+                        className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-red-500"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1 text-right">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Subtotal</label>
                     <p className="py-2 text-sm font-black text-indigo-600 tracking-tighter">
                       R$ {((item.price * item.quantity) - item.discount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
@@ -249,6 +327,32 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
                 </button>
               </div>
             ))}
+
+            {(!formData.items || formData.items.length === 0) && (
+              <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-[2.5rem] bg-slate-50/30">
+                <ShoppingCart size={48} className="mx-auto text-slate-200 mb-4" />
+                <p className="text-slate-400 font-black uppercase tracking-widest text-xs">O carrinho está vazio</p>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex-1 w-full max-w-md">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 block mb-2">Observações Adicionais</label>
+              <textarea 
+                rows={3}
+                value={formData.notes}
+                onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-medium resize-none text-sm"
+                placeholder="Ex: Entrega agendada para sábado..."
+              />
+            </div>
+            <div className="bg-slate-900 p-8 rounded-[2rem] text-white min-w-[280px] text-right shadow-2xl">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Total do Orçamento</p>
+              <p className="text-4xl font-black text-indigo-400 tracking-tighter">
+                R$ {formData.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
           </div>
         </section>
 

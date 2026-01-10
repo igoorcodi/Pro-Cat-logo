@@ -97,66 +97,68 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
   };
 
   return (
-    <div className="max-w-4xl mx-auto pb-20 animate-in slide-in-from-right-4 duration-500">
+    <div className="max-w-4xl mx-auto pb-32 sm:pb-20 animate-in slide-in-from-right-4 duration-500 px-2 sm:px-0">
       {isClone && (
-        <div className="mb-8 p-6 bg-amber-50 border-2 border-amber-200 rounded-[2rem] flex flex-col sm:flex-row items-center gap-4 animate-in slide-in-from-top-4 duration-500">
-          <div className="w-14 h-14 bg-amber-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200 shrink-0">
-            <AlertTriangle size={30} />
+        <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-amber-50 border-2 border-amber-200 rounded-[1.5rem] sm:rounded-[2rem] flex flex-col sm:flex-row items-center gap-3 sm:gap-4 animate-in slide-in-from-top-4 duration-500">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-amber-200 shrink-0">
+            <AlertTriangle size={24} className="sm:size-[30px]" />
           </div>
           <div className="text-center sm:text-left">
-            <h4 className="text-lg font-black text-amber-900 uppercase tracking-tight">Clonando Produto</h4>
-            <p className="text-sm font-bold text-amber-700">O novo produto será criado ao salvar.</p>
+            <h4 className="text-base sm:text-lg font-black text-amber-900 uppercase tracking-tight">Clonando Produto</h4>
+            <p className="text-xs sm:text-sm font-bold text-amber-700">O novo produto será criado ao salvar.</p>
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 sm:mb-8">
         <button 
           onClick={onCancel}
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-medium transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors text-sm sm:text-base"
         >
-          <ArrowLeft size={20} />
-          Voltar para Lista
+          <ArrowLeft size={18} className="sm:size-[20px]" />
+          <span className="hidden sm:inline">Voltar para Lista</span>
+          <span className="sm:hidden">Voltar</span>
         </button>
-        <h2 className="text-2xl font-bold text-slate-800">
-          {isClone ? 'Revisar Cópia' : initialData ? 'Editar Produto' : 'Adicionar Novo Produto'}
+        <h2 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight text-right">
+          {isClone ? 'Revisar Cópia' : initialData ? 'Editar Produto' : 'Novo Produto'}
         </h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-6 text-slate-800">
+      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+        <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-5 sm:mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
               <Plus size={18} />
             </div>
-            <h3 className="font-bold text-lg">Informações Básicas</h3>
+            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Informações Básicas</h3>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2 col-span-2">
-              <label className="text-sm font-semibold text-slate-700">Nome do Produto*</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+            <div className="space-y-2 col-span-1 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Produto*</label>
               <input 
                 required
                 type="text" 
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all font-bold text-slate-800"
                 placeholder="Ex: Tênis Esportivo Pro"
               />
             </div>
 
-            <div className="space-y-2 col-span-2">
-              <label className="text-sm font-semibold text-slate-700">Descrição</label>
+            <div className="space-y-2 col-span-1 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Descrição</label>
               <textarea 
                 rows={4}
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none resize-none font-medium text-sm text-slate-600"
+                placeholder="Detalhes sobre o material, uso, etc."
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Preço de Venda (R$)*</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Preço de Venda*</label>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">R$</div>
                 <input 
@@ -166,50 +168,51 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                   min="0"
                   value={formData.price}
                   onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700"
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-black text-indigo-600"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">SKU / Código</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">SKU / Código</label>
               <input 
                 type="text" 
                 value={formData.sku}
                 onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-bold uppercase text-slate-800"
+                placeholder="REF-123"
               />
             </div>
           </div>
         </section>
 
-        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-6 text-slate-800">
+        <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-5 sm:mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
               <Package size={18} />
             </div>
-            <h3 className="font-bold text-lg">Estoque e Categoria</h3>
+            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Estoque e Categoria</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Estoque</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Estoque Disponível</label>
               <input 
                 type="number" 
                 value={formData.stock}
                 onChange={(e) => setFormData(prev => ({ ...prev, stock: parseInt(e.target.value) || 0 }))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-black text-slate-800"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Categoria Principal*</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Categoria Principal*</label>
               <select 
                 required
                 value={formData.categoryId}
                 onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-bold text-slate-800 cursor-pointer appearance-none"
               >
                 <option value="">Selecionar...</option>
                 {categories.map(cat => (
@@ -219,12 +222,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
             </div>
 
             {selectedCategory && selectedCategory.subcategories?.length > 0 && (
-              <div className="space-y-2 animate-in slide-in-from-top-2">
-                <label className="text-sm font-semibold text-slate-700">Subcategoria</label>
+              <div className="space-y-2 animate-in slide-in-from-top-2 col-span-1 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Subcategoria</label>
                 <select 
                   value={formData.subcategoryId}
                   onChange={(e) => setFormData(prev => ({ ...prev, subcategoryId: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-bold text-slate-800 cursor-pointer appearance-none"
                 >
                   <option value="">Nenhuma</option>
                   {selectedCategory.subcategories.map(sub => (
@@ -236,22 +239,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
           </div>
         </section>
 
-        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-6 text-slate-800">
+        <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-5 sm:mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
               <ImageIcon size={18} />
             </div>
-            <h3 className="font-bold text-lg">Imagens (Até 5)</h3>
+            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Imagens (Até 5)</h3>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
             {formData.images?.map((img, idx) => (
-              <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
+              <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 group shadow-sm">
                 <img src={img} alt="" className="w-full h-full object-cover" />
                 <button 
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, images: prev.images?.filter((_, i) => i !== idx) }))}
-                  className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1.5 right-1.5 p-1.5 bg-red-500 text-white rounded-lg lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shadow-lg"
                 >
                   <Trash2 size={12} />
                 </button>
@@ -260,44 +263,45 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
             {(formData.images?.length || 0) < 5 && (
               <div className="relative aspect-square">
                 <input 
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  className="hidden"
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept="image/*" 
+                  className="hidden" 
                 />
                 <button 
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-400 transition-all bg-slate-50"
+                  className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-400 transition-all bg-slate-50 active:bg-slate-100"
                 >
-                  <Upload size={24} />
-                  <span className="text-[10px] font-bold mt-2 uppercase">Upload</span>
+                  <Upload size={20} className="sm:size-[24px]" />
+                  <span className="text-[9px] sm:text-[10px] font-black mt-2 uppercase tracking-widest">Upload</span>
                 </button>
               </div>
             )}
           </div>
+          <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Formato JPG/PNG recomendado</p>
         </section>
 
-        <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 flex items-center justify-end gap-4 z-40">
+        <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 sm:p-6 bg-white/90 backdrop-blur-md border-t border-slate-100 flex items-center justify-between sm:justify-end gap-3 sm:gap-6 z-40 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
           <button 
             type="button"
             onClick={onCancel}
-            className="px-6 py-2.5 text-slate-600 font-bold hover:text-slate-900"
+            className="flex-1 sm:flex-none px-6 py-3.5 text-slate-500 font-black text-xs uppercase tracking-widest hover:text-slate-800 transition-all active:scale-95"
           >
             Cancelar
           </button>
           <button 
             type="submit"
             disabled={isSaving}
-            className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg disabled:opacity-50"
+            className="flex-[2] sm:flex-none flex items-center justify-center gap-2 px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 active:scale-95"
           >
             {isSaving ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              <Save size={20} />
+              <Save size={18} />
             )}
-            {isClone ? 'Criar Cópia' : 'Salvar Produto'}
+            {isClone ? 'Criar Cópia' : 'Salvar'}
           </button>
         </div>
       </form>
