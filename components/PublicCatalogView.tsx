@@ -38,39 +38,34 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | number>('Todas');
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   
-  // Estado para a subcategoria que o cliente escolhe no modal de detalhes
   const [selectedSubForOrder, setSelectedSubForOrder] = useState<Subcategory | null>(null);
 
-  // Limpa a seleção sempre que mudar o produto sendo visualizado
   useEffect(() => {
     setSelectedSubForOrder(null);
   }, [viewingProduct]);
 
-  // Categorias únicas presentes nos produtos do catálogo
-  const availableCategoryNames = useMemo(() => ['Todos', ...new Set(products.map(p => p.category))], [products]);
+  const availableCategoryNames = useMemo(() => ['Todos', ...new Set(products.map(p => p.category).filter(Boolean))], [products]);
 
-  // Subcategorias disponíveis para a categoria selecionada atualmente nos filtros da vitrine
   const currentSubcategories = useMemo(() => {
     if (selectedCategoryName === 'Todos') return [];
     const cat = categories.find(c => c.name === selectedCategoryName);
     return cat?.subcategories || [];
   }, [selectedCategoryName, categories]);
 
-  // Subcategorias que o produto SENDO VISUALIZADO possui
   const viewingProductSubs = useMemo(() => {
     if (!viewingProduct || !viewingProduct.subcategoryIds) return [];
-    
-    // Coleta todas as subcategorias de todas as categorias do sistema para fazer o de-para
     const allSubsInSystem = categories.flatMap(c => c.subcategories || []);
-    
-    // Filtra apenas as que pertencem a este produto específico
     return allSubsInSystem.filter(sub => viewingProduct.subcategoryIds?.includes(sub.id));
   }, [viewingProduct, categories]);
 
   const filteredProducts = useMemo(() => {
+    const search = searchTerm.toLowerCase();
     return products.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategoryName === 'Todos' || p.category === selectedCategoryName;
+      const name = p.name || '';
+      const category = p.category || '';
+      
+      const matchesSearch = name.toLowerCase().includes(search);
+      const matchesCategory = selectedCategoryName === 'Todos' || category === selectedCategoryName;
       const matchesSubcategory = selectedSubcategoryId === 'Todas' || 
                                (p.subcategoryIds && p.subcategoryIds.includes(selectedSubcategoryId));
       
@@ -79,13 +74,13 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   }, [products, searchTerm, selectedCategoryName, selectedSubcategoryId]);
 
   const handleOrder = (product: Product) => {
-    const sellerPhone = company?.whatsapp?.replace(/\D/g, '') || seller?.phone?.replace(/\D/g, '') || '';
-    
-    // Constrói a string da opção caso o cliente tenha selecionado uma
+    const sellerPhone = (company?.whatsapp || seller?.phone || '').replace(/\D/g, '');
+    if (!sellerPhone) return;
+
     const subOptionText = selectedSubForOrder ? `\n*Opção:* ${selectedSubForOrder.name}` : '';
     
     const message = encodeURIComponent(
-      `Olá! Tenho interesse no item: *${product.name}* (Ref: ${product.sku || 'N/A'})${subOptionText}\n\nVi no catálogo: *${catalog?.name}*`
+      `Olá! Tenho interesse no item: *${product.name || 'Produto'}* (Ref: ${product.sku || 'N/A'})${subOptionText}\n\nVi no catálogo: *${catalog?.name || 'Vitrine'}*`
     );
     window.open(`https://wa.me/${sellerPhone}?text=${message}`, '_blank');
   };
@@ -139,7 +134,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           <div className="w-full h-full bg-slate-900" />
         )}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-          <h1 className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg">{catalog?.name}</h1>
+          <h1 className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg">{catalog?.name || 'Catálogo Virtual'}</h1>
           <p className="text-white/90 text-xs sm:text-sm mt-2 max-w-md line-clamp-2">{catalog?.description}</p>
         </div>
       </div>
@@ -170,30 +165,34 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         )}
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 my-8 mb-24 lg:mb-16">
+      {/* Grid ajustado para cards maiores: 2 colunas mobile, 2 tablet, 3-4 desktop */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8 my-8 mb-24 lg:mb-16">
         {isLoading ? (
           <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
         ) : filteredProducts.length > 0 ? (
           filteredProducts.map(product => (
-            <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-slate-100 flex flex-col cursor-pointer">
-              <div className="aspect-square bg-slate-50 overflow-hidden relative">
+            <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-slate-100 flex flex-col cursor-pointer h-full">
+              <div className="aspect-square bg-slate-50 overflow-hidden relative shrink-0">
                 {product.images && product.images.length > 0 ? (
-                  <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={product.name} />
+                  <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={product.name} />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2">
-                    <ImageOff size={24} strokeWidth={1} />
-                    <span className="text-[8px] font-black uppercase tracking-tighter">Imagem indisponível</span>
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2 p-4">
+                    <ImageOff size={32} strokeWidth={1} />
+                    <span className="text-xs font-black uppercase tracking-tighter text-center">Imagem Indisponível</span>
                   </div>
                 )}
               </div>
-              <div className="p-3 flex flex-col flex-1 justify-between">
+              {/* Padding aumentado para cards maiores */}
+              <div className="p-6 sm:p-7 flex flex-col flex-1 justify-between">
                 <div>
-                  <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">{product.category}</span>
-                  <h3 className="font-bold text-slate-800 text-xs line-clamp-2 mb-1 mt-0.5">{product.name}</h3>
-                  <p className="text-indigo-600 font-black text-sm">R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest line-clamp-1">{product.category || 'Geral'}</span>
+                  {/* Nome do produto com fonte maior */}
+                  <h3 className="font-bold text-slate-800 text-lg leading-tight line-clamp-2 mb-3 mt-1.5">{product.name || 'Sem nome'}</h3>
+                  {/* Preço com fonte maior */}
+                  <p className="text-indigo-600 font-black text-xl">R$ {(product.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
-                <button className="mt-3 w-full py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-100 group-hover:bg-indigo-700 transition-all">
-                  Ver Detalhes <ArrowRight size={12}/>
+                <button className="mt-6 w-full py-3.5 bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 group-hover:bg-indigo-600 group-hover:text-white transition-all border border-transparent group-hover:border-indigo-600 group-hover:shadow-xl group-hover:shadow-indigo-100">
+                  Ver Item <ArrowRight size={14}/>
                 </button>
               </div>
             </div>
@@ -290,17 +289,16 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto">
               <div className="hidden sm:flex justify-end mb-4"><button onClick={() => setViewingProduct(null)} className="p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-slate-200 transition-all"><X size={20} /></button></div>
               <div className="mb-6">
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{viewingProduct.category}</span>
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800 leading-tight mt-1">{viewingProduct.name}</h2>
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{viewingProduct.category || 'Geral'}</span>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800 leading-tight mt-1">{viewingProduct.name || 'Sem nome'}</h2>
               </div>
               
               <div className="flex-1 space-y-6">
                 <div>
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Sobre este item</h4>
-                  <p className="text-slate-600 text-sm leading-relaxed">{viewingProduct.description}</p>
+                  <p className="text-slate-600 text-sm leading-relaxed">{viewingProduct.description || 'Nenhuma descrição fornecida.'}</p>
                 </div>
 
-                {/* SEÇÃO DE ESCOLHA DE OPÇÃO (SUB-CATEGORIAS) */}
                 {viewingProductSubs.length > 0 && (
                   <div className="animate-in slide-in-from-top-2 duration-500">
                     <div className="flex items-center justify-between mb-3">
@@ -337,7 +335,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               <div className="mt-auto pt-6 border-t border-slate-100 flex flex-col gap-4">
                 <div className="flex items-baseline justify-between">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor</p>
-                  <span className="text-2xl sm:text-3xl font-black text-slate-900">R$ {viewingProduct.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900">R$ {(viewingProduct.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 
                 <button 

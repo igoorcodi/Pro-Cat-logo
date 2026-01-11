@@ -96,22 +96,16 @@ const App: React.FC = () => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  /**
-   * Remove campos que não devem ser enviados no corpo de um INSERT ou UPDATE.
-   */
   const sanitizePayload = (payload: any) => {
     const cleaned = { ...payload };
-    
     delete cleaned.id;
     delete cleaned.createdAt;
     delete cleaned.created_at;
-
     Object.keys(cleaned).forEach(key => {
       if (cleaned[key] === '' || cleaned[key] === undefined || cleaned[key] === null) {
         delete cleaned[key];
       }
     });
-    
     return cleaned;
   };
 
@@ -175,6 +169,13 @@ const App: React.FC = () => {
             return;
           }
 
+          const { data: catData } = await supabase
+            .from('categories')
+            .select('*, subcategories(*)')
+            .eq('user_id', catalogData.user_id);
+          
+          if (catData) setCategories(catData);
+
           const { data: sellerData } = await supabase
             .from('users')
             .select('id, name, phone')
@@ -203,7 +204,8 @@ const App: React.FC = () => {
             if (prodData) {
               setPublicProducts(prodData.map(p => ({ 
                 ...p, 
-                subcategoryIds: p.subcategory_ids || [], // Mapeia array
+                subcategoryIds: p.subcategory_ids || [],
+                category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria',
                 createdAt: p.created_at 
               })));
             }
@@ -254,9 +256,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', user.id);
           if (error) throw error;
           return data || [];
-        } catch (e) {
-          return [];
-        }
+        } catch (e) { return []; }
       };
 
       const fetchProducts = async (catData: any[]) => {
@@ -267,7 +267,7 @@ const App: React.FC = () => {
             setProducts(data.map(p => ({ 
               ...p, 
               categoryId: p.category_id, 
-              subcategoryIds: p.subcategory_ids || [], // Novo mapeamento
+              subcategoryIds: p.subcategory_ids || [],
               category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria', 
               createdAt: p.created_at 
             })));
@@ -378,7 +378,7 @@ const App: React.FC = () => {
       ...product,
       user_id: user.id,
       category_id: product.categoryId,
-      subcategory_ids: product.subcategoryIds // Envia o array para o banco
+      subcategory_ids: product.subcategoryIds
     });
     delete dataToSave.categoryId;
     delete dataToSave.subcategoryId;
@@ -494,7 +494,6 @@ const App: React.FC = () => {
         company={company}
         isLoading={isLoadingData}
         error={publicCatalogError}
-        // Passamos as categorias para a vitrine ter os filtros de subcategoria
         categories={categories}
         onBack={() => {
           if (user) setView('catalogs'); else setView('login');
@@ -557,7 +556,7 @@ const App: React.FC = () => {
             {['products', 'customers', 'quotations'].includes(view) && (
               <button onClick={() => {
                 if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
-                else if (view === 'quotations') setView('quotation-form');
+                else if (view === 'quotations') { setEditingQuotation(undefined); setView('quotation-form'); }
                 else { setEditingProduct(undefined); setIsCloning(false); setView('product-form'); }
               }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
@@ -566,15 +565,15 @@ const App: React.FC = () => {
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
-          {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} />}
+          {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} quotations={quotations} />}
           {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={(id) => openDeleteConfirmation('customer', id, 'Cliente')} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
           {view === 'products' && <ProductList products={products} onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} onDelete={(id) => openDeleteConfirmation('product', id, 'Produto')} onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} />}
           {view === 'product-form' && <ProductForm initialData={editingProduct} categories={categories} isClone={isCloning} onSave={handleSaveProduct} onCancel={() => setView('products')} />}
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
-          {view === 'quotations' && <QuotationList quotations={quotations} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
-          {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
+          {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
+          {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={() => handleLogoutRequest()} onRefresh={fetchData} company={company} onSaveCompany={handleSaveCompany} />}
         </div>
       </main>

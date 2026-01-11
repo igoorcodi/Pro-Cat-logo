@@ -14,32 +14,72 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Hash,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { Customer } from '../types';
 
 interface CustomerListProps {
   customers: Customer[];
   onEdit: (customer: Customer) => void;
-  // Fix: customer ID can be number or string
   onDelete: (id: string | number) => void;
   onAdd: () => void;
 }
 
+type SortOption = 'newest' | 'id-asc' | 'id-desc' | 'name-asc';
+
 const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete, onAdd }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm)
-    );
-  }, [customers, searchTerm]);
+    const search = searchTerm.toLowerCase();
+    let result = customers.filter(c => {
+      const name = c.name || '';
+      const email = c.email || '';
+      const phone = c.phone || '';
+      const id = String(c.id || '').toLowerCase();
+      return name.toLowerCase().includes(search) ||
+             email.toLowerCase().includes(search) ||
+             phone.includes(searchTerm) ||
+             id.includes(search);
+    });
+
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'id-asc': {
+          const idA = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
+          const idB = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
+          return idA - idB;
+        }
+        case 'id-desc': {
+          const idA = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
+          const idB = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
+          return idB - idA;
+        }
+        case 'name-asc': return (a.name || '').localeCompare(b.name || '');
+        case 'newest': return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        default: return 0;
+      }
+    });
+
+    return result;
+  }, [customers, searchTerm, sortBy]);
+
+  const handleToggleIdSort = () => {
+    if (sortBy === 'id-asc') {
+      setSortBy('id-desc');
+    } else {
+      setSortBy('id-asc');
+    }
+  };
 
   const handleWhatsApp = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    if (!cleanPhone) return;
     window.open(`https://wa.me/${cleanPhone}`, '_blank');
   };
 
@@ -50,7 +90,7 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input 
             type="text" 
-            placeholder="Buscar por nome, email ou telefone..."
+            placeholder="Buscar por nome, Código, email ou telefone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-50 transition-all outline-none shadow-sm"
@@ -85,78 +125,97 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
 
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCustomers.map(customer => (
-            <div 
-              key={customer.id} 
-              onClick={() => onEdit(customer)}
-              className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden cursor-pointer"
-            >
-              <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                 <button 
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEdit(customer); }} 
-                  className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-colors"
-                 >
-                   <Edit2 size={18}/>
-                 </button>
-                 <button 
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(customer.id); }} 
-                  className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
-                 >
-                   <Trash2 size={18}/>
-                 </button>
-              </div>
+          {filteredCustomers.map(customer => {
+            const customerId = String(customer.id);
+            return (
+              <div 
+                key={customer.id} 
+                onClick={() => onEdit(customer)}
+                className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden cursor-pointer"
+              >
+                <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                   <button 
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEdit(customer); }} 
+                    className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-colors"
+                   >
+                     <Edit2 size={18}/>
+                   </button>
+                   <button 
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(customer.id); }} 
+                    className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
+                   >
+                     <Trash2 size={18}/>
+                   </button>
+                </div>
 
-              <div className="flex items-center gap-5 mb-8">
-                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center font-black text-2xl shadow-inner uppercase shrink-0">
-                  {customer.name[0]}
-                </div>
-                <div className="min-w-0">
-                  <h4 className="text-xl font-black text-slate-800 tracking-tight leading-tight truncate">{customer.name}</h4>
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 mt-2 rounded-full text-[10px] font-black uppercase tracking-widest ${customer.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                    {customer.status === 'active' ? <CheckCircle2 size={12}/> : <XCircle size={12}/>}
-                    {customer.status === 'active' ? 'Ativo' : 'Inativo'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
-                  <Mail size={16} className="text-indigo-400 shrink-0" /> <span className="truncate">{customer.email || 'Sem email'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
-                  <Phone size={16} className="text-indigo-400 shrink-0" /> {customer.phone}
-                </div>
-                {customer.city && (
-                  <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
-                    <MapPin size={16} className="text-indigo-400 shrink-0" /> {customer.city}, {customer.state}
+                <div className="flex items-center gap-5 mb-8">
+                  <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center font-black text-2xl shadow-inner uppercase shrink-0">
+                    {(customer.name || '?')[0]}
                   </div>
-                )}
-              </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="bg-slate-900 text-white text-[9px] font-black px-2 py-0.5 rounded-md border border-slate-800 uppercase tracking-widest">
+                        Cód: #{customerId.length > 8 ? customerId.substring(0, 8) + '...' : customerId}
+                      </span>
+                    </div>
+                    <h4 className="text-xl font-black text-slate-800 tracking-tight leading-tight truncate">{customer.name || 'Sem nome'}</h4>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 mt-2 rounded-full text-[10px] font-black uppercase tracking-widest ${customer.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                      {customer.status === 'active' ? <CheckCircle2 size={12}/> : <XCircle size={12}/>}
+                      {customer.status === 'active' ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }}
-                  className="flex items-center justify-center gap-2 py-3.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                  <MessageCircle size={16} /> WhatsApp
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onEdit(customer); }}
-                  className="flex items-center justify-center gap-2 py-3.5 bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                  <FileText size={16} /> Detalhes
-                </button>
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
+                    <Mail size={16} className="text-indigo-400 shrink-0" /> <span className="truncate">{customer.email || 'Sem email'}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
+                    <Phone size={16} className="text-indigo-400 shrink-0" /> {customer.phone || 'Sem telefone'}
+                  </div>
+                  {customer.city && (
+                    <div className="flex items-center gap-3 text-slate-500 text-sm font-medium">
+                      <MapPin size={16} className="text-indigo-400 shrink-0" /> {customer.city}, {customer.state}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }}
+                    className="flex items-center justify-center gap-2 py-3.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+                  >
+                    <MessageCircle size={16} /> WhatsApp
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onEdit(customer); }}
+                    className="flex items-center justify-center gap-2 py-3.5 bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+                  >
+                    <FileText size={16} /> Detalhes
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Tabela Responsiva - Oculta em mobile, visível em MD+ */}
           <div className="hidden md:block bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
+                  <th className="px-8 py-5 text-left">
+                    <button 
+                      onClick={handleToggleIdSort}
+                      className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors group"
+                    >
+                      Código
+                      <div className="flex flex-col">
+                        <ChevronUp size={10} className={`-mb-0.5 transition-opacity ${sortBy === 'id-asc' ? 'opacity-100 text-indigo-600' : 'opacity-30 group-hover:opacity-60'}`} />
+                        <ChevronDown size={10} className={`transition-opacity ${sortBy === 'id-desc' ? 'opacity-100 text-indigo-600' : 'opacity-30 group-hover:opacity-60'}`} />
+                      </div>
+                    </button>
+                  </th>
                   <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
                   <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Contato</th>
                   <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cidade/UF</th>
@@ -168,17 +227,20 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                 {filteredCustomers.map(customer => (
                   <tr key={customer.id} onClick={() => onEdit(customer)} className="group hover:bg-slate-50/80 transition-all cursor-pointer">
                     <td className="px-8 py-5">
+                      <span className="font-mono text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md">#{customer.id}</span>
+                    </td>
+                    <td className="px-8 py-5">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-black text-sm uppercase shrink-0">
-                          {customer.name[0]}
+                          {(customer.name || '?')[0]}
                         </div>
-                        <span className="font-bold text-slate-800 text-sm truncate max-w-[200px]">{customer.name}</span>
+                        <span className="font-bold text-slate-800 text-sm truncate max-w-[200px]">{customer.name || 'Sem nome'}</span>
                       </div>
                     </td>
                     <td className="px-8 py-5">
                       <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-slate-600">{customer.phone}</p>
-                        <p className="text-[10px] text-slate-400 font-medium truncate max-w-[180px]">{customer.email}</p>
+                        <p className="text-xs font-bold text-slate-600">{customer.phone || 'Sem telefone'}</p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate max-w-[180px]">{customer.email || 'Sem e-mail'}</p>
                       </div>
                     </td>
                     <td className="px-8 py-5">
@@ -202,61 +264,66 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
             </table>
           </div>
 
-          {/* Lista Mobile - Visível apenas em telas pequenas */}
           <div className="md:hidden space-y-3">
-            {filteredCustomers.map(customer => (
-              <div 
-                key={customer.id}
-                onClick={() => onEdit(customer)}
-                className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4 active:scale-[0.98] transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-sm uppercase shrink-0">
-                      {customer.name[0]}
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-slate-800 text-sm truncate">{customer.name}</h4>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`w-2 h-2 rounded-full ${customer.status === 'active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{customer.status === 'active' ? 'Ativo' : 'Inativo'}</span>
+            {filteredCustomers.map(customer => {
+              const customerId = String(customer.id);
+              return (
+                <div 
+                  key={customer.id}
+                  onClick={() => onEdit(customer)}
+                  className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4 active:scale-[0.98] transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-sm uppercase shrink-0">
+                        {(customer.name || '?')[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                           <span className="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-100">Cód: #{customerId.substring(0, 6)}</span>
+                           <h4 className="font-bold text-slate-800 text-sm truncate">{customer.name || 'Sem nome'}</h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`w-2 h-2 rounded-full ${customer.status === 'active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{customer.status === 'active' ? 'Ativo' : 'Inativo'}</span>
+                        </div>
                       </div>
                     </div>
+                    <ChevronRight size={18} className="text-slate-300" />
                   </div>
-                  <ChevronRight size={18} className="text-slate-300" />
-                </div>
 
-                <div className="grid grid-cols-1 gap-2 border-t border-slate-50 pt-3">
-                   <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                     <Phone size={14} className="text-indigo-400" /> {customer.phone}
-                   </div>
-                   <div className="flex items-center gap-2 text-xs font-medium text-slate-500 truncate">
-                     <Mail size={14} className="text-indigo-400" /> {customer.email || 'Sem email'}
-                   </div>
-                </div>
+                  <div className="grid grid-cols-1 gap-2 border-t border-slate-50 pt-3">
+                     <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                       <Phone size={14} className="text-indigo-400" /> {customer.phone || 'Sem telefone'}
+                     </div>
+                     <div className="flex items-center gap-2 text-xs font-medium text-slate-500 truncate">
+                       <Mail size={14} className="text-indigo-400" /> {customer.email || 'Sem email'}
+                     </div>
+                  </div>
 
-                <div className="flex items-center gap-2 pt-1">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
-                  >
-                    <MessageCircle size={16} /> WhatsApp
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onEdit(customer); }}
-                    className="p-2.5 bg-slate-50 text-slate-400 rounded-xl"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onDelete(customer.id); }}
-                    className="p-2.5 bg-red-50 text-red-400 rounded-xl"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      <MessageCircle size={16} /> WhatsApp
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onEdit(customer); }}
+                      className="p-2.5 bg-slate-50 text-slate-400 rounded-xl"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onDelete(customer.id); }}
+                      className="p-2.5 bg-red-50 text-red-400 rounded-xl"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

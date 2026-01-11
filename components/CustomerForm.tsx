@@ -10,7 +10,8 @@ import {
   Phone,
   Mail,
   CreditCard,
-  Building
+  Building,
+  Loader2
 } from 'lucide-react';
 import { Customer } from '../types';
 
@@ -38,6 +39,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isFetchingCEP, setIsFetchingCEP] = useState(false);
 
   // Máscara CPF/CNPJ
   const maskCPFCNPJ = (value: string) => {
@@ -71,9 +73,34 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
     setFormData(prev => ({ ...prev, document: maskedValue }));
   };
 
-  const handleCEPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const maskedValue = maskCEP(e.target.value);
+  const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    const maskedValue = maskCEP(rawValue);
+    const cleanCEP = maskedValue.replace(/\D/g, '');
+    
     setFormData(prev => ({ ...prev, zipCode: maskedValue }));
+
+    if (cleanCEP.length === 8) {
+      setIsFetchingCEP(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCEP}/json/`);
+        const data = await response.json();
+        
+        if (!data.erro) {
+          setFormData(prev => ({
+            ...prev,
+            address: data.logradouro,
+            neighborhood: data.bairro,
+            city: data.localidade,
+            state: data.uf
+          }));
+        }
+      } catch (err) {
+        console.error("Erro ao buscar CEP:", err);
+      } finally {
+        setIsFetchingCEP(false);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,7 +194,15 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
         </section>
 
         {/* Seção Endereço */}
-        <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
+        <section className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm space-y-8 relative overflow-hidden">
+          {isFetchingCEP && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center animate-in fade-in">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="animate-spin text-indigo-600" size={32} />
+                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Buscando CEP...</span>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 text-emerald-600 mb-2">
             <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center">
               <MapPin size={20} />
@@ -178,13 +213,15 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             <div className="md:col-span-3 space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">CEP</label>
-              <input 
-                type="text" 
-                value={formData.zipCode}
-                onChange={handleCEPChange}
-                placeholder="00000-000"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
-              />
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={formData.zipCode}
+                  onChange={handleCEPChange}
+                  placeholder="00000-000"
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
+                />
+              </div>
             </div>
             <div className="md:col-span-6 space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Rua / Logradouro</label>

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Save, 
   Trash2, 
@@ -18,18 +18,21 @@ import {
   Play,
   CheckCircle,
   PackageCheck,
-  ImageOff
+  ImageOff,
+  UserCheck,
+  ChevronDown
 } from 'lucide-react';
-import { Product, Quotation, QuotationItem, QuotationStatus } from '../types';
+import { Product, Quotation, QuotationItem, QuotationStatus, Customer } from '../types';
 
 interface QuotationFormProps {
   initialData?: Quotation;
   products: Product[];
+  customers: Customer[];
   onSave: (quotation: Partial<Quotation>) => void;
   onCancel: () => void;
 }
 
-const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, onSave, onCancel }) => {
+const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, customers, onSave, onCancel }) => {
   const [formData, setFormData] = useState<Partial<Quotation>>(initialData || {
     clientName: '',
     clientPhone: '',
@@ -45,10 +48,17 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
 
   const [productSearch, setProductSearch] = useState('');
   const [showProductList, setShowProductList] = useState(false);
+  
+  const [customerSearch, setCustomerSearch] = useState(initialData?.clientName || '');
+  const [showCustomerList, setShowCustomerList] = useState(false);
+  const customerListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const newTotal = formData.items?.reduce((acc, curr) => {
-      const subtotal = (curr.price * curr.quantity) - curr.discount;
+      const price = curr.price || 0;
+      const qty = curr.quantity || 0;
+      const discount = curr.discount || 0;
+      const subtotal = (price * qty) - discount;
       return acc + subtotal;
     }, 0) || 0;
     
@@ -57,23 +67,55 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
     }
   }, [formData.items, formData.total]);
 
+  // Click outside to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (customerListRef.current && !customerListRef.current.contains(event.target as Node)) {
+        setShowCustomerList(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const filteredProducts = useMemo(() => {
-    return products.filter(p => 
-      p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-      p.sku.toLowerCase().includes(productSearch.toLowerCase())
-    );
+    const search = (productSearch || '').toLowerCase();
+    return products.filter(p => {
+      const name = (p.name || '').toLowerCase();
+      const sku = (p.sku || '').toLowerCase();
+      return name.includes(search) || sku.includes(search);
+    });
   }, [products, productSearch]);
+
+  const filteredCustomers = useMemo(() => {
+    const search = (customerSearch || '').toLowerCase();
+    return customers.filter(c => {
+      const name = (c.name || '').toLowerCase();
+      const phone = (c.phone || '').toLowerCase();
+      return name.includes(search) || phone.includes(search);
+    });
+  }, [customers, customerSearch]);
+
+  const selectCustomer = (customer: Customer) => {
+    setFormData(prev => ({
+      ...prev,
+      clientName: customer.name,
+      clientPhone: customer.phone
+    }));
+    setCustomerSearch(customer.name);
+    setShowCustomerList(false);
+  };
 
   const addItem = (product: Product) => {
     const existing = formData.items?.find(i => i.productId === product.id);
     if (existing) {
-      updateItem(product.id, { quantity: existing.quantity + 1 });
+      updateItem(product.id, { quantity: (existing.quantity || 0) + 1 });
     } else {
       const newItem: QuotationItem = {
         productId: product.id,
-        name: product.name,
+        name: product.name || 'Sem nome',
         quantity: 1,
-        price: product.price,
+        price: product.price || 0,
         discount: 0
       };
       setFormData(prev => ({ 
@@ -85,7 +127,6 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
     setShowProductList(false);
   };
 
-  // Fix: Change productId type from string to string | number to match QuotationItem and Product types
   const updateItem = (productId: string | number, updates: Partial<QuotationItem>) => {
     const updatedItems = formData.items?.map(item => {
       if (item.productId === productId) {
@@ -100,7 +141,6 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
     setFormData(prev => ({ ...prev, items: updatedItems }));
   };
 
-  // Fix: Change productId type from string to string | number to match QuotationItem and Product types
   const removeItem = (productId: string | number) => {
     const updatedItems = formData.items?.filter(i => i.productId !== productId) || [];
     setFormData(prev => ({ ...prev, items: updatedItems }));
@@ -112,7 +152,6 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
       alert("Por favor, preencha o cliente, vendedor e adicione pelo menos um item.");
       return;
     }
-    
     onSave(formData);
   };
 
@@ -144,17 +183,45 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome do Cliente*</label>
+            <div className="space-y-2 relative" ref={customerListRef}>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                <Search size={12} /> Nome do Cliente*
+              </label>
               <input 
                 required
                 type="text" 
-                value={formData.clientName}
-                onChange={e => setFormData(prev => ({ ...prev, clientName: e.target.value }))}
+                value={customerSearch}
+                onChange={e => {
+                  setCustomerSearch(e.target.value);
+                  setFormData(prev => ({ ...prev, clientName: e.target.value }));
+                  setShowCustomerList(true);
+                }}
+                onFocus={() => setShowCustomerList(true)}
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
-                placeholder="Ex: Maria Silva"
+                placeholder="Pesquisar cliente..."
               />
+              {showCustomerList && filteredCustomers.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[60] max-h-60 overflow-y-auto overflow-x-hidden animate-in fade-in zoom-in-95 duration-200">
+                  {filteredCustomers.map(c => (
+                    <button 
+                      key={c.id}
+                      type="button"
+                      onClick={() => selectCustomer(c)}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-indigo-50 text-left transition-all border-b last:border-0 border-slate-50"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 font-black text-xs uppercase">
+                        {(c.name || '?')[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800 truncate">{c.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">{c.phone || 'S/ Tel'}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">WhatsApp / Telefone*</label>
               <input 
@@ -220,7 +287,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
                   <option value="delivered">📦 Entregue</option>
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                   <Clock size={16} />
+                   <ChevronDown size={16} />
                 </div>
               </div>
             </div>
@@ -260,8 +327,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
                         </div>
                       )}
                       <div>
-                        <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">R$ {p.price.toLocaleString('pt-BR')}</p>
+                        <p className="text-sm font-bold text-slate-800">{(p.name || '').toUpperCase()}</p>
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">R$ {(p.price || 0).toLocaleString('pt-BR')}</p>
                       </div>
                     </button>
                   ))}
@@ -271,62 +338,72 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
           </div>
 
           <div className="space-y-4">
+            <div className="hidden lg:grid grid-cols-12 gap-4 px-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2">
+              <div className="col-span-4">Item / Produto</div>
+              <div className="col-span-2 text-center">Preço UN.</div>
+              <div className="col-span-2 text-center">QTD.</div>
+              <div className="col-span-2 text-center">Desconto (R$)</div>
+              <div className="col-span-2 text-right">Subtotal</div>
+            </div>
+
             {formData.items?.map(item => (
-              <div key={item.productId} className="flex flex-col lg:flex-row items-start lg:items-center gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-md">
-                <div className="flex-1 w-full">
-                  <p className="text-sm font-black text-slate-800 tracking-tight">{item.name}</p>
+              <div key={item.productId} className="flex flex-col lg:grid lg:grid-cols-12 items-start lg:items-center gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-md relative">
+                <div className="col-span-4 w-full">
+                  <p className="text-sm font-black text-slate-800 tracking-tight">{(item.name || 'Sem nome').toUpperCase()}</p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full lg:w-auto">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Preço Venda</label>
-                    <div className="relative">
-                      <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[10px]">R$</div>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        min="0"
-                        value={item.price}
-                        onChange={e => updateItem(item.productId, { price: parseFloat(e.target.value) || 0 })}
-                        className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Qtd</label>
+                <div className="col-span-2 w-full lg:text-center">
+                  <label className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Preço UN.</label>
+                  <div className="relative">
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[10px]">R$</div>
                     <input 
                       type="number" 
-                      min="1"
-                      value={item.quantity}
-                      onChange={e => updateItem(item.productId, { quantity: parseInt(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-center"
+                      step="0.01"
+                      min="0"
+                      value={item.price}
+                      onChange={e => updateItem(item.productId, { price: parseFloat(e.target.value) || 0 })}
+                      className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-center"
                     />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desconto</label>
-                    <div className="relative">
-                      <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-red-400 font-bold text-[10px]">R$</div>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        min="0"
-                        value={item.discount}
-                        onChange={e => updateItem(item.productId, { discount: parseFloat(e.target.value) || 0 })}
-                        className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-red-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1 text-right">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Subtotal</label>
-                    <p className="py-2 text-sm font-black text-indigo-600 tracking-tighter">
-                      R$ {((item.price * item.quantity) - item.discount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
                   </div>
                 </div>
 
-                <button type="button" onClick={() => removeItem(item.productId)} className="p-3 text-slate-300 hover:text-red-500 transition-all">
-                  <Trash2 size={20} />
-                </button>
+                <div className="col-span-2 w-full lg:text-center">
+                  <label className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">QTD.</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={item.quantity}
+                    onChange={e => updateItem(item.productId, { quantity: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-center"
+                  />
+                </div>
+
+                <div className="col-span-2 w-full lg:text-center">
+                  <label className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Desconto</label>
+                  <div className="relative">
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-red-400 font-bold text-[10px]">R$</div>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      min="0"
+                      value={item.discount}
+                      onChange={e => updateItem(item.productId, { discount: parseFloat(e.target.value) || 0 })}
+                      className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none text-red-500 text-center"
+                    />
+                  </div>
+                </div>
+
+                <div className="col-span-2 w-full text-right flex items-center justify-end gap-3">
+                  <div className="space-y-1 text-right">
+                    <label className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest block">Subtotal</label>
+                    <p className="text-sm font-black text-indigo-600 tracking-tighter">
+                      R$ {(((item.price || 0) * (item.quantity || 0)) - (item.discount || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => removeItem(item.productId)} className="p-2 text-slate-300 hover:text-red-500 transition-all">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -352,7 +429,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
             <div className="bg-slate-900 p-8 rounded-[2rem] text-white min-w-[280px] text-right shadow-2xl">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Total do Orçamento</p>
               <p className="text-4xl font-black text-indigo-400 tracking-tighter">
-                R$ {formData.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {(formData.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -362,7 +439,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
           <button type="button" onClick={onCancel} className="px-8 py-4 text-slate-500 font-black uppercase tracking-widest text-xs">Cancelar</button>
           <button 
             type="submit" 
-            className="flex items-center gap-3 px-12 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 transition-all active:scale-95"
+            className="flex items-center gap-3 px-12 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 active:scale-95"
           >
             <Save size={20} /> Salvar Orçamento
           </button>

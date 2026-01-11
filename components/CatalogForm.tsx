@@ -8,7 +8,6 @@ interface CatalogFormProps {
   products: Product[];
   onClose: () => void;
   onSave: (catalog: Partial<Catalog>) => void;
-  // Fix: catalog ID can be number or string
   onDelete: (id: string | number) => void;
 }
 
@@ -28,13 +27,14 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const search = searchTerm.toLowerCase();
+    return products.filter(p => {
+      const name = p.name || '';
+      const category = p.category || '';
+      return name.toLowerCase().includes(search) || category.toLowerCase().includes(search);
+    });
   }, [products, searchTerm]);
 
-  // Fix: product ID can be number or string
   const toggleProduct = (id: string | number) => {
     setFormData(prev => {
       const currentIds = prev.productIds || [];
@@ -88,7 +88,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col h-full sm:h-[90vh]">
-        {/* Header - Mais compacto no mobile */}
         <div className="p-4 sm:p-6 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center shadow-lg backdrop-blur-sm border border-white/20">
@@ -104,13 +103,9 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
           </button>
         </div>
 
-        {/* Body - Unificado para scroll no mobile e split no desktop */}
         <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row bg-slate-50/30">
-          
-          {/* Lado Esquerdo - Configurações */}
           <div className="w-full lg:w-1/2 p-5 sm:p-8 lg:p-10 lg:overflow-y-auto border-b lg:border-b-0 lg:border-r border-slate-100 bg-white">
             <form id="catalog-form" onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
-              
               <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-2">
                 <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-1 flex items-center gap-2">
                   <LinkIcon size={14} /> Link Personalizado
@@ -130,7 +125,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                 <p className="text-[9px] text-indigo-300 font-bold uppercase tracking-tight">O link facilitará o acesso dos seus clientes.</p>
               </div>
 
-              {/* Seção de Branding (Logo) */}
               <div className="p-5 bg-slate-50 border border-slate-100 rounded-3xl space-y-4">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
                   <Building2 size={14} className="text-indigo-500" /> Logotipo da Vitrine
@@ -232,7 +226,7 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                   ) : (
                     <div className="space-y-3">
                       <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto text-indigo-500">
-                        <FileImage size={24} />
+                        <ImageIcon size={24} />
                       </div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clique para subir foto de capa</p>
                     </div>
@@ -242,7 +236,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
             </form>
           </div>
 
-          {/* Lado Direito - Seleção de Produtos */}
           <div className="w-full lg:w-1/2 p-5 sm:p-8 lg:p-10 lg:overflow-y-auto flex flex-col h-full bg-slate-50/50">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
@@ -284,8 +277,8 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-800 text-sm truncate tracking-tight">{product.name}</p>
-                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{product.category}</p>
+                      <p className="font-bold text-slate-800 text-sm truncate tracking-tight">{product.name || 'Sem nome'}</p>
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{product.category || 'Sem categoria'}</p>
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                       isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 bg-white'
@@ -304,7 +297,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
           </div>
         </div>
 
-        {/* Footer - Ajustado para botões empilhados no mobile */}
         <div className="px-5 sm:px-10 py-5 bg-white border-t border-slate-100 flex flex-col-reverse sm:flex-row items-center justify-between gap-4 shrink-0">
           <div className="w-full sm:w-auto">
             {initialData && (
