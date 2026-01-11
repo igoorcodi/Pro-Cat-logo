@@ -1,8 +1,8 @@
 
 /**
- * COMANDO SQL PARA O BANCO DE DADOS:
+ * COMANDO SQL COMPLETO PARA O BANCO DE DADOS:
  * 
- * -- 1. Criar a tabela de empresas (Configurações Gerais)
+ * -- 1. Tabela de Empresas
  * CREATE TABLE IF NOT EXISTS companies (
  *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
  *   user_id uuid REFERENCES users(id) ON DELETE CASCADE,
@@ -24,14 +24,11 @@
  *   CONSTRAINT companies_user_id_key UNIQUE (user_id)
  * );
  * 
- * -- 2. Atualizar tabela de catálogos (Vitrines) para aceitar logo própria
+ * -- 2. Atualizar tabela de catálogos
  * ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS logo_url text;
  * 
- * -- 3. Habilitar RLS
- * ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
- * 
- * -- 4. Criar política de acesso total via App
- * CREATE POLICY "Acesso total via App" ON companies FOR ALL USING (true) WITH CHECK (true);
+ * -- 3. Funções de Autenticação (RPC)
+ * -- Execute o script SQL unificado fornecido na resposta para garantir o login.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -174,7 +171,7 @@ const App: React.FC = () => {
           setIsLoadingData(true);
           setPublicCatalogError(null);
           
-          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicCatalogId);
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicCatalogId);
           let query = supabase.from('catalogs').select('*');
           if (isUUID) {
             query = query.or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`);
