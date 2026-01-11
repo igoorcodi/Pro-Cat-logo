@@ -22,7 +22,10 @@ import {
   Plus,
   Minus,
   Trash2,
-  Share2
+  Share2,
+  Phone,
+  Globe,
+  CreditCard
 } from 'lucide-react';
 
 interface PublicCatalogViewProps {
@@ -318,6 +321,124 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           </div>
         )}
       </main>
+
+      {/* Footer Section - Company Information */}
+      <footer className="bg-white border-t border-slate-200 py-12 px-6 mt-auto">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+          {/* Column 1: Brand & Bio */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              {displayLogoUrl ? (
+                <img src={displayLogoUrl} className="w-10 h-10 rounded-xl object-cover shadow-sm" alt="Logo" />
+              ) : (
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+                  <Building2 size={24} />
+                </div>
+              )}
+              <h4 className="font-black text-slate-900 uppercase tracking-tighter">{company?.trading_name || company?.name || catalog?.name}</h4>
+            </div>
+            <p className="text-sm text-slate-500 leading-relaxed font-medium">
+              Sua vitrine digital profissional. Confira nossos produtos e entre em contato para fazer seu pedido diretamente pelo WhatsApp.
+            </p>
+            {company?.document && (
+              <div className="flex items-center gap-2 text-slate-400">
+                <CreditCard size={14} />
+                <span className="text-[10px] font-black uppercase tracking-widest">CNPJ/CPF: {company.document}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Column 2: Contact */}
+          <div className="space-y-4">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Canais de Contato</h5>
+            <ul className="space-y-3">
+              {company?.whatsapp && (
+                <li>
+                  <a 
+                    href={`https://wa.me/${company.whatsapp.replace(/\D/g, '')}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-slate-600 hover:text-emerald-600 transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                      <Phone size={16} />
+                    </div>
+                    <span className="text-sm font-bold">{company.whatsapp}</span>
+                  </a>
+                </li>
+              )}
+              {company?.email && (
+                <li>
+                  <a 
+                    href={`mailto:${company.email}`} 
+                    className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                      <Mail size={16} />
+                    </div>
+                    <span className="text-sm font-bold">{company.email}</span>
+                  </a>
+                </li>
+              )}
+            </ul>
+          </div>
+
+          {/* Column 3: Location */}
+          <div className="space-y-4">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Onde Estamos</h5>
+            {company?.address ? (
+              <div className="flex items-start gap-3 text-slate-600 group">
+                <div className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                  <MapPin size={16} />
+                </div>
+                <div className="text-sm font-medium leading-tight">
+                  <p className="font-bold">{company.address}, {company.number || 'S/N'}</p>
+                  <p className="text-slate-400 text-xs">{company.neighborhood}</p>
+                  <p className="text-slate-400 text-xs">{company.city} - {company.state}</p>
+                  {company.zip_code && <p className="text-slate-400 text-[10px] mt-1">CEP: {company.zip_code}</p>}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 italic">Vendas exclusivamente online.</p>
+            )}
+          </div>
+
+          {/* Column 4: Social */}
+          <div className="space-y-4">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Siga-nos</h5>
+            <div className="flex gap-3">
+              {company?.instagram && (
+                <a 
+                  href={`https://instagram.com/${company.instagram.replace('@', '')}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-xl bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform active:scale-95"
+                >
+                  <Instagram size={20} />
+                </a>
+              )}
+              {/* Fallback Globe icon if no socials are set */}
+              {!company?.instagram && (
+                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                  <Globe size={20} />
+                </div>
+              )}
+            </div>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-4">
+              Acompanhe nossas novidades diariamente nas redes sociais.
+            </p>
+          </div>
+        </div>
+
+        {/* Bottom Credits */}
+        <div className="max-w-7xl mx-auto pt-12 mt-12 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 opacity-30 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+          <div className="flex items-center gap-2">
+            <ShoppingCart size={14} />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em]">Vitrine protegida por Catálogo Pro</p>
+          </div>
+          <p className="text-[10px] font-bold">© {new Date().getFullYear()} {company?.name || 'Sistema de Gestão'}</p>
+        </div>
+      </footer>
 
       {/* Floating Cart Button for Mobile */}
       {cart.length > 0 && !isCartOpen && (

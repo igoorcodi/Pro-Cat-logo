@@ -38,7 +38,8 @@ import {
   Mail,
   MapPin,
   CreditCard,
-  Building
+  Building,
+  PartyPopper
 } from 'lucide-react';
 import { Product, Category, User, UserPermissions, PermissionLevel, Company } from '../types';
 import { supabase } from '../supabase';
@@ -280,16 +281,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setTimeout(() => setProfileSuccess(false), 3000);
+    setTimeout(() => setProfileSuccess(false), 4000);
   };
 
   const handleCompanySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingCompany(true);
+    setCompanySuccess(false);
     try {
       await onSaveCompany(companyFormData);
       setCompanySuccess(true);
-      setTimeout(() => setCompanySuccess(false), 3000);
+      setTimeout(() => setCompanySuccess(false), 4000);
     } catch (err) {
       console.error(err);
     } finally {
@@ -497,7 +499,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-10 border-t border-slate-100">
-              <button onClick={handleSaveProfile} className="w-full sm:w-auto px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"><Check size={20} /> Salvar Alterações</button>
+              <div className="flex flex-col gap-2 w-full sm:w-auto">
+                <button onClick={handleSaveProfile} className="w-full sm:w-auto px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                  <Check size={20} /> Salvar Alterações
+                </button>
+                {profileSuccess && (
+                  <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest animate-in fade-in slide-in-from-top-1">
+                    <CheckCircle size={14} /> Perfil atualizado com sucesso!
+                  </div>
+                )}
+              </div>
               <button onClick={onLogout} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 bg-white border border-red-100 hover:bg-red-50 text-red-500 rounded-2xl font-black text-sm transition-all shadow-sm"><LogOut size={20} /> Encerrar Sessão</button>
             </div>
           </div>
@@ -579,10 +590,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 pt-10 border-t border-slate-100">
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-10 border-t border-slate-100">
                 <button type="submit" disabled={isSavingCompany} className="w-full sm:w-auto px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
                   {isSavingCompany ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} Salvar Dados da Empresa
                 </button>
+                {companySuccess && (
+                  <div className="flex items-center gap-3 px-6 py-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-emerald-100 animate-in fade-in slide-in-from-left-2 shadow-sm">
+                    <PartyPopper size={20} className="text-emerald-500" /> Alterações salvas com sucesso!
+                  </div>
+                )}
               </div>
             </form>
           </div>
