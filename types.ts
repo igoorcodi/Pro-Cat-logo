@@ -16,7 +16,7 @@ export interface UserPermissions {
 }
 
 export interface User {
-  id: string;
+  id: number | string;
   name: string;
   email: string;
   password?: string;
@@ -28,8 +28,8 @@ export interface User {
 }
 
 export interface Company {
-  id?: string;
-  user_id: string;
+  id?: number | string;
+  user_id: number | string;
   name: string;
   trading_name?: string;
   document?: string;
@@ -48,7 +48,7 @@ export interface Company {
 }
 
 export interface Customer {
-  id: string;
+  id: number | string;
   name: string;
   email: string;
   phone: string;
@@ -62,22 +62,22 @@ export interface Customer {
   status: CustomerStatus;
   notes?: string;
   createdAt: string;
-  user_id: string;
+  user_id: number | string;
 }
 
 export interface Subcategory {
-  id: string;
+  id: number | string;
   name: string;
 }
 
 export interface Category {
-  id: string;
+  id: number | string;
   name: string;
   subcategories: Subcategory[];
 }
 
 export interface Product {
-  id: string;
+  id: number | string;
   name: string;
   description: string;
   price: number;
@@ -86,14 +86,15 @@ export interface Product {
   stock: number;
   status: ProductStatus;
   category: string; 
-  categoryId?: string;
-  subcategoryId?: string;
+  categoryId?: number | string;
+  subcategoryId?: number | string;
+  subcategoryIds?: (number | string)[]; // Novo campo para múltiplas subcategorias
   tags: string[];
   createdAt: string;
 }
 
 export interface QuotationItem {
-  productId: string;
+  productId: number | string;
   name: string;
   quantity: number;
   price: number; 
@@ -101,7 +102,7 @@ export interface QuotationItem {
 }
 
 export interface Quotation {
-  id: string;
+  id: number | string;
   clientName: string;
   clientPhone: string;
   sellerName: string;
@@ -115,15 +116,15 @@ export interface Quotation {
 }
 
 export interface Catalog {
-  id: string;
+  id: number | string;
   name: string;
-  slug?: string; // Novo campo para ID do link amigável
+  slug?: string;
   description: string;
   coverImage: string;
-  logoUrl?: string; // Logotipo específico da vitrine
-  productIds: string[];
+  logoUrl?: string;
+  productIds: (number | string)[];
   publicUrl?: string;
-  user_id?: string;
+  user_id?: number | string;
   createdAt: string;
 }
 

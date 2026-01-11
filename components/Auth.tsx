@@ -23,9 +23,15 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
   const formatError = (err: any): string => {
     if (!err) return '';
     if (typeof err === 'string') return err;
-    if (err.message) return err.message;
-    if (err.details) return err.details;
-    return 'Erro desconhecido no servidor.';
+    if (err.message && typeof err.message === 'string') return err.message;
+    if (err.details && typeof err.details === 'string') return err.details;
+    if (err.error_description && typeof err.error_description === 'string') return err.error_description;
+    try {
+      const stringified = JSON.stringify(err);
+      return stringified === '{}' ? String(err) : stringified;
+    } catch (e) {
+      return String(err);
+    }
   };
 
   const handleSwitchView = (newView: AppView) => {
@@ -54,27 +60,29 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
         });
 
         if (registerError) {
+          console.error('Erro no registro:', registerError);
           const msg = formatError(registerError);
-          setErrorMessage(msg.includes('unique') ? 'Este e-mail já está cadastrado.' : msg);
+          if (msg.includes('unique') || msg.includes('duplicate')) {
+            setErrorMessage('Este e-mail já está em uso.');
+          } else {
+            setErrorMessage(msg);
+          }
           setIsLoading(false);
           return;
         }
 
-        setSuccessMessage('Conta criada! Agora você pode entrar.');
+        setSuccessMessage('Conta criada com sucesso! Redirecionando...');
         setTimeout(() => setView('login'), 2000);
         
       } else {
-        // LOGIN
-        console.log('Tentando login para:', cleanEmail);
-        
         const { data, error: loginError } = await supabase.rpc('login_user', {
           email_input: cleanEmail,
           password_input: password
         });
 
         if (loginError) {
-          console.error('Erro RPC login_user:', loginError);
-          setErrorMessage('Falha na comunicação com o banco de dados.');
+          console.error('Erro no login RPC:', loginError);
+          setErrorMessage('Erro ao autenticar. Verifique sua conexão.');
           setIsLoading(false);
           return;
         }
@@ -86,26 +94,22 @@ const Auth: React.FC<AuthProps> = ({ view, setView, onLogin }) => {
         }
 
         const userData = data[0];
-        
         if (userData.status !== 'active') {
-          setErrorMessage('Sua conta está desativada.');
+          setErrorMessage('Esta conta está inativa.');
           setIsLoading(false);
           return;
         }
 
-        // Sucesso
         onLogin(userData as User);
       }
     } catch (err: any) {
-      console.error('Exceção no Auth:', err);
-      setErrorMessage('Erro de conexão. Verifique sua internet.');
+      console.error('Exceção no processo de Auth:', err);
+      setErrorMessage('Falha na comunicação com o servidor.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ... (Resto do componente permanece igual, mas com os novos estilos aplicados acima)
-  
   if (view === 'onboarding') {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-500">

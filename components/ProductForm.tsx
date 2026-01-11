@@ -6,14 +6,14 @@ import {
   Image as ImageIcon, 
   Plus, 
   Trash2, 
-  Eye, 
   Save, 
   ArrowLeft,
   Package,
-  Tags,
-  Layout,
   AlertTriangle,
-  DollarSign
+  ImageOff,
+  ChevronDown,
+  Check,
+  Layers
 } from 'lucide-react';
 import { Product, Category } from '../types';
 
@@ -34,25 +34,44 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     stock: 0,
     status: 'active',
     categoryId: '',
-    subcategoryId: '',
+    subcategoryIds: [],
     tags: [],
     images: []
   });
 
-  const [tagInput, setTagInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Máscara de Moeda
+  const formatCurrency = (value: number | string) => {
+    let val = typeof value === 'number' ? value.toFixed(2) : value;
+    val = val.replace(/\D/g, '');
+    const options = { minimumFractionDigits: 2 };
+    const result = new Intl.NumberFormat('pt-BR', options).format(
+      parseFloat(val) / 100
+    );
+    return result;
+  };
+
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\D/g, '');
+    const numericValue = parseFloat(rawValue) / 100;
+    setFormData(prev => ({ ...prev, price: numericValue || 0 }));
+  };
+
   const selectedCategory = useMemo(() => {
-    return categories.find(c => c.id === formData.categoryId);
+    if (!formData.categoryId) return null;
+    return categories.find(c => String(c.id) === String(formData.categoryId));
   }, [categories, formData.categoryId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     
-    // O App.tsx tratará se é INSERT ou UPDATE baseado no ID
-    onSave(formData);
+    const finalData = { ...formData };
+    if (isClone) delete finalData.id;
+    
+    onSave(finalData);
     setIsSaving(false);
   };
 
@@ -77,23 +96,36 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     e.target.value = '';
   };
 
-  const addTag = () => {
-    if (tagInput && !formData.tags?.includes(tagInput)) {
-      setFormData(prev => ({ ...prev, tags: [...(prev.tags || []), tagInput] }));
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    setFormData(prev => ({ ...prev, tags: prev.tags?.filter(t => t !== tag) }));
-  };
-
   const handleCategoryChange = (catId: string) => {
     setFormData(prev => ({
       ...prev,
       categoryId: catId,
-      subcategoryId: '' 
+      subcategoryIds: [] // Limpa ao trocar categoria pai
     }));
+  };
+
+  const toggleSubcategory = (subId: string | number) => {
+    setFormData(prev => {
+      const ids = prev.subcategoryIds || [];
+      const exists = ids.includes(subId);
+      return {
+        ...prev,
+        subcategoryIds: exists ? ids.filter(id => id !== subId) : [...ids, subId]
+      };
+    });
+  };
+
+  const selectAllSubcategories = () => {
+    if (!selectedCategory || !selectedCategory.subcategories) return;
+    const allIds = selectedCategory.subcategories.map(s => s.id);
+    setFormData(prev => ({
+      ...prev,
+      subcategoryIds: allIds
+    }));
+  };
+
+  const clearSubcategories = () => {
+    setFormData(prev => ({ ...prev, subcategoryIds: [] }));
   };
 
   return (
@@ -115,7 +147,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
           onClick={onCancel}
           className="flex items-center gap-1.5 sm:gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors text-sm sm:text-base"
         >
-          <ArrowLeft size={18} className="sm:size-[20px]" />
+          <ArrowLeft size={18} />
           <span className="hidden sm:inline">Voltar para Lista</span>
           <span className="sm:hidden">Voltar</span>
         </button>
@@ -163,13 +195,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">R$</div>
                 <input 
                   required
-                  type="number" 
-                  step="0.01"
-                  min="0"
-                  value={formData.price}
-                  onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  type="text" 
+                  value={formatCurrency(formData.price || 0)}
+                  onChange={handlePriceChange}
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-black text-indigo-600"
-                  placeholder="0.00"
+                  placeholder="0,00"
                 />
               </div>
             </div>
@@ -192,7 +222,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
               <Package size={18} />
             </div>
-            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Estoque e Categoria</h3>
+            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Estoque e Classificação</h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
@@ -208,32 +238,69 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Categoria Principal*</label>
-              <select 
-                required
-                value={formData.categoryId}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-bold text-slate-800 cursor-pointer appearance-none"
-              >
-                <option value="">Selecionar...</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {selectedCategory && selectedCategory.subcategories?.length > 0 && (
-              <div className="space-y-2 animate-in slide-in-from-top-2 col-span-1 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Subcategoria</label>
+              <div className="relative">
                 <select 
-                  value={formData.subcategoryId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, subcategoryId: e.target.value }))}
+                  required
+                  value={formData.categoryId}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
                   className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-bold text-slate-800 cursor-pointer appearance-none"
                 >
-                  <option value="">Nenhuma</option>
-                  {selectedCategory.subcategories.map(sub => (
-                    <option key={sub.id} value={sub.id}>{sub.name}</option>
+                  <option value="">Selecionar...</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+              </div>
+            </div>
+
+            {selectedCategory && selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
+              <div className="space-y-4 animate-in slide-in-from-top-2 duration-300 col-span-1 md:col-span-2">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
+                    <Layers size={14} /> Subcategorias de {selectedCategory.name}
+                  </label>
+                  <div className="flex gap-3">
+                    <button 
+                      type="button" 
+                      onClick={selectAllSubcategories}
+                      className="text-[9px] font-black text-indigo-600 uppercase hover:underline"
+                    >
+                      Selecionar Todas
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={clearSubcategories}
+                      className="text-[9px] font-black text-slate-400 uppercase hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {selectedCategory.subcategories.map(sub => {
+                    const isSelected = formData.subcategoryIds?.includes(sub.id);
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => toggleSubcategory(sub.id)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border-2 ${
+                          isSelected 
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' 
+                            : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-indigo-200'
+                        }`}
+                      >
+                        {isSelected && <Check size={14} className="stroke-[3]" />}
+                        {sub.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                  {formData.subcategoryIds?.length || 0} subcategorias selecionadas
+                </p>
               </div>
             )}
           </div>
@@ -244,7 +311,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
               <ImageIcon size={18} />
             </div>
-            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Imagens (Até 5)</h3>
+            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Imagens do Produto</h3>
           </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
@@ -274,13 +341,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-400 transition-all bg-slate-50 active:bg-slate-100"
                 >
-                  <Upload size={20} className="sm:size-[24px]" />
-                  <span className="text-[9px] sm:text-[10px] font-black mt-2 uppercase tracking-widest">Upload</span>
+                  <Upload size={20} />
+                  <span className="text-[10px] font-black mt-2 uppercase tracking-widest">Upload</span>
                 </button>
               </div>
             )}
           </div>
-          <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Formato JPG/PNG recomendado</p>
+          <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Formato JPG/PNG recomendado (Máx. 5 fotos)</p>
         </section>
 
         <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 sm:p-6 bg-white/90 backdrop-blur-md border-t border-slate-100 flex items-center justify-between sm:justify-end gap-3 sm:gap-6 z-40 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
@@ -301,7 +368,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
             ) : (
               <Save size={18} />
             )}
-            {isClone ? 'Criar Cópia' : 'Salvar'}
+            {isClone ? 'Confirmar Cópia' : 'Salvar Produto'}
           </button>
         </div>
       </form>

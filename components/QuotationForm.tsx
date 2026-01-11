@@ -85,7 +85,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
     setShowProductList(false);
   };
 
-  const updateItem = (productId: string, updates: Partial<QuotationItem>) => {
+  // Fix: Change productId type from string to string | number to match QuotationItem and Product types
+  const updateItem = (productId: string | number, updates: Partial<QuotationItem>) => {
     const updatedItems = formData.items?.map(item => {
       if (item.productId === productId) {
         const updated = { ...item, ...updates };
@@ -99,7 +100,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({ initialData, products, on
     setFormData(prev => ({ ...prev, items: updatedItems }));
   };
 
-  const removeItem = (productId: string) => {
+  // Fix: Change productId type from string to string | number to match QuotationItem and Product types
+  const removeItem = (productId: string | number) => {
     const updatedItems = formData.items?.filter(i => i.productId !== productId) || [];
     setFormData(prev => ({ ...prev, items: updatedItems }));
   };

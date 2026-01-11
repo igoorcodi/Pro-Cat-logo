@@ -24,7 +24,8 @@ import WhatsAppModal from './WhatsAppModal';
 interface ProductListProps {
   products: Product[];
   onEdit: (product: Product) => void;
-  onDelete: (id: string) => void;
+  // Fix: product ID can be number or string
+  onDelete: (id: string | number) => void;
   onDuplicate: (product: Product) => void;
 }
 
@@ -136,7 +137,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                   <h4 className="font-bold text-slate-800 text-sm sm:text-base leading-tight line-clamp-2 mt-1">{product.name}</h4>
                 </div>
                 <div className="flex items-center justify-between pt-3">
-                  <p className="text-base sm:text-xl font-black text-indigo-600 tracking-tight">R$ {product.price.toLocaleString('pt-BR')}</p>
+                  <p className="text-base sm:text-xl font-black text-indigo-600 tracking-tight">R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <button onClick={(e) => { e.stopPropagation(); onDelete(product.id); }} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                 </div>
               </div>
@@ -167,11 +168,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                             <ImageOff size={14} />
                           </div>
                         )}
-                        <span className="font-bold text-slate-800 text-xs line-clamp-1">{product.name}</span>
+                        <span className="font-bold text-slate-800 text-sm truncate max-w-[200px]">{product.name}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs font-bold text-slate-600">{product.stock} un.</td>
-                    <td className="px-4 py-3 font-black text-indigo-600 text-xs">R$ {product.price.toLocaleString('pt-BR')}</td>
+                    <td className="px-4 py-3 font-black text-indigo-600 text-xs">R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={(e) => { e.stopPropagation(); onEdit(product); }} className="p-1.5 text-slate-400 hover:text-indigo-600"><Edit2 size={14}/></button>

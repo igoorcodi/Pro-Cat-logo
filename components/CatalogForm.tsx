@@ -8,7 +8,8 @@ interface CatalogFormProps {
   products: Product[];
   onClose: () => void;
   onSave: (catalog: Partial<Catalog>) => void;
-  onDelete: (id: string) => void;
+  // Fix: catalog ID can be number or string
+  onDelete: (id: string | number) => void;
 }
 
 const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClose, onSave, onDelete }) => {
@@ -33,7 +34,8 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
     );
   }, [products, searchTerm]);
 
-  const toggleProduct = (id: string) => {
+  // Fix: product ID can be number or string
+  const toggleProduct = (id: string | number) => {
     setFormData(prev => {
       const currentIds = prev.productIds || [];
       const newIds = currentIds.includes(id) 

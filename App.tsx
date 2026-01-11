@@ -1,36 +1,4 @@
 
-/**
- * COMANDO SQL COMPLETO PARA O BANCO DE DADOS:
- * 
- * -- 1. Tabela de Empresas
- * CREATE TABLE IF NOT EXISTS companies (
- *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
- *   user_id uuid REFERENCES users(id) ON DELETE CASCADE,
- *   name text NOT NULL,
- *   trading_name text,
- *   document text,
- *   email text,
- *   phone text,
- *   whatsapp text,
- *   instagram text,
- *   logo_url text,
- *   zip_code text,
- *   address text,
- *   number text,
- *   neighborhood text,
- *   city text,
- *   state text,
- *   created_at timestamp with time zone DEFAULT now(),
- *   CONSTRAINT companies_user_id_key UNIQUE (user_id)
- * );
- * 
- * -- 2. Atualizar tabela de catálogos
- * ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS logo_url text;
- * 
- * -- 3. Funções de Autenticação (RPC)
- * -- Execute o script SQL unificado fornecido na resposta para garantir o login.
- */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
@@ -116,7 +84,7 @@ const App: React.FC = () => {
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
     type: 'product' | 'customer' | 'quotation';
-    id: string;
+    id: number | string;
     title: string;
     message: string;
   }>({
@@ -127,6 +95,25 @@ const App: React.FC = () => {
     message: ''
   });
   const [isDeleting, setIsDeleting] = useState(false);
+
+  /**
+   * Remove campos que não devem ser enviados no corpo de um INSERT ou UPDATE.
+   */
+  const sanitizePayload = (payload: any) => {
+    const cleaned = { ...payload };
+    
+    delete cleaned.id;
+    delete cleaned.createdAt;
+    delete cleaned.created_at;
+
+    Object.keys(cleaned).forEach(key => {
+      if (cleaned[key] === '' || cleaned[key] === undefined || cleaned[key] === null) {
+        delete cleaned[key];
+      }
+    });
+    
+    return cleaned;
+  };
 
   const safeReplaceState = (url: string) => {
     try {
@@ -171,23 +158,18 @@ const App: React.FC = () => {
           setIsLoadingData(true);
           setPublicCatalogError(null);
           
-          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicCatalogId);
+          const isNumeric = /^\d+$/.test(publicCatalogId);
           let query = supabase.from('catalogs').select('*');
-          if (isUUID) {
-            query = query.or(`slug.eq.${publicCatalogId},id.eq.${publicCatalogId}`);
+          
+          if (isNumeric) {
+            query = query.or(`id.eq.${publicCatalogId},slug.eq.${publicCatalogId}`);
           } else {
             query = query.eq('slug', publicCatalogId);
           }
 
           const { data: catalogData, error: catError } = await query.maybeSingle();
 
-          if (catError) {
-            setPublicCatalogError("Erro ao conectar com o servidor.");
-            setIsLoadingData(false);
-            return;
-          }
-
-          if (!catalogData) {
+          if (catError || !catalogData) {
             setPublicCatalogError("O catálogo solicitado não foi encontrado.");
             setIsLoadingData(false);
             return;
@@ -219,17 +201,19 @@ const App: React.FC = () => {
               .eq('status', 'active');
             
             if (prodData) {
-              setPublicProducts(prodData.map(p => ({ ...p, createdAt: p.created_at })));
+              setPublicProducts(prodData.map(p => ({ 
+                ...p, 
+                subcategoryIds: p.subcategory_ids || [], // Mapeia array
+                createdAt: p.created_at 
+              })));
             }
           }
 
           setSelectedCatalog({
             ...catalogData,
-            slug: catalogData.slug,
             productIds: catalogData.product_ids || [],
             coverImage: catalogData.cover_image,
             logoUrl: catalogData.logo_url,
-            publicUrl: catalogData.public_url,
             createdAt: catalogData.created_at
           });
           setIsLoadingData(false);
@@ -263,57 +247,78 @@ const App: React.FC = () => {
   const fetchData = useCallback(async () => {
     if (!user) return;
     setIsLoadingData(true);
+    
     try {
-      const [
-        { data: prodData },
-        { data: catData },
-        { data: catalogData },
-        { data: quotData },
-        { data: custData },
-        { data: companyData }
-      ] = await Promise.all([
-        supabase.from('products').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }),
-        supabase.from('categories').select('*, subcategories(*)').eq('user_id', user.id),
-        supabase.from('catalogs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('quotations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('customers').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false }),
-        supabase.from('companies').select('*').eq('user_id', user.id).maybeSingle()
+      const fetchCategories = async () => {
+        try {
+          const { data, error } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', user.id);
+          if (error) throw error;
+          return data || [];
+        } catch (e) {
+          return [];
+        }
+      };
+
+      const fetchProducts = async (catData: any[]) => {
+        try {
+          const { data, error } = await supabase.from('products').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false });
+          if (error) throw error;
+          if (data) {
+            setProducts(data.map(p => ({ 
+              ...p, 
+              categoryId: p.category_id, 
+              subcategoryIds: p.subcategory_ids || [], // Novo mapeamento
+              category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria', 
+              createdAt: p.created_at 
+            })));
+          }
+        } catch (e) {}
+      };
+
+      const fetchCatalogs = async () => {
+        try {
+          const { data, error } = await supabase.from('catalogs').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+          if (error) throw error;
+          if (data) setCatalogs(data.map(c => ({ ...c, productIds: c.product_ids || [], coverImage: c.cover_image, logoUrl: c.logo_url, createdAt: c.created_at })));
+        } catch (e) {}
+      };
+
+      const fetchQuotations = async () => {
+        try {
+          const { data, error } = await supabase.from('quotations').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+          if (error) throw error;
+          if (data) setQuotations(data.map(q => ({ ...q, clientName: q.client_name, clientPhone: q.client_phone, sellerName: q.seller_name, quotationDate: q.quotation_date, createdAt: q.created_at })));
+        } catch (e) {}
+      };
+
+      const fetchCustomers = async () => {
+        try {
+          const { data, error } = await supabase.from('customers').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false });
+          if (error) throw error;
+          if (data) setCustomers(data.map(c => ({ ...c, zipCode: c.zip_code, createdAt: c.created_at })));
+        } catch (e) {}
+      };
+
+      const fetchCompany = async () => {
+        try {
+          const { data, error } = await supabase.from('companies').select('*').eq('user_id', user.id).maybeSingle();
+          if (error) throw error;
+          if (data) setCompany(data);
+        } catch (e) {}
+      };
+
+      const categoriesData = await fetchCategories();
+      setCategories(categoriesData);
+      
+      await Promise.all([
+        fetchProducts(categoriesData),
+        fetchCatalogs(),
+        fetchQuotations(),
+        fetchCustomers(),
+        fetchCompany()
       ]);
 
-      if (catData) setCategories(catData);
-      
-      if (prodData) setProducts(prodData.map(p => ({ 
-        ...p, 
-        categoryId: p.category_id, 
-        subcategoryId: p.subcategory_id, 
-        category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria', 
-        createdAt: p.created_at 
-      })));
-      
-      if (catalogData) setCatalogs(catalogData.map(c => ({ 
-        ...c, 
-        productIds: c.product_ids || [], 
-        coverImage: c.cover_image, 
-        logoUrl: c.logo_url,
-        createdAt: c.created_at 
-      })));
-      
-      if (quotData) setQuotations(quotData.map(q => ({ 
-        ...q, 
-        clientName: q.client_name, 
-        clientPhone: q.client_phone, 
-        sellerName: q.seller_name, 
-        quotationDate: q.quotation_date, 
-        createdAt: q.created_at 
-      })));
-      
-      if (custData) setCustomers(custData.map(c => ({ 
-        ...c, 
-        zipCode: c.zip_code, 
-        createdAt: c.created_at 
-      })));
-
-      if (companyData) setCompany(companyData);
+    } catch (error) {
     } finally {
       setIsLoadingData(false);
     }
@@ -349,68 +354,88 @@ const App: React.FC = () => {
 
   const handleSaveCustomer = async (customer: Partial<Customer>) => {
     if (!user) return;
-    const dataToSave: any = { 
+    const id = customer.id;
+    const isNew = !id;
+    const dataToSave: any = sanitizePayload({ 
       ...customer, 
       user_id: user.id,
       zip_code: customer.zipCode 
-    };
+    });
     delete dataToSave.zipCode;
-    delete dataToSave.createdAt;
-    const { error } = await supabase.from('customers').upsert(dataToSave);
+
+    const { error } = isNew 
+      ? await supabase.from('customers').insert(dataToSave)
+      : await supabase.from('customers').update(dataToSave).eq('id', id);
+
     if (error) alert(error.message); else { fetchData(); setView('customers'); }
   };
 
   const handleSaveProduct = async (product: Partial<Product>) => {
     if (!user) return;
-    const dataToSave: any = {
+    const id = product.id;
+    const isNew = !id || isCloning;
+    const dataToSave: any = sanitizePayload({
       ...product,
       user_id: user.id,
       category_id: product.categoryId,
-      subcategory_id: product.subcategoryId
-    };
+      subcategory_ids: product.subcategoryIds // Envia o array para o banco
+    });
     delete dataToSave.categoryId;
     delete dataToSave.subcategoryId;
+    delete dataToSave.subcategoryIds;
     delete dataToSave.category;
-    delete dataToSave.createdAt;
-    const { error } = await supabase.from('products').upsert(dataToSave);
+
+    const { error } = isNew 
+      ? await supabase.from('products').insert(dataToSave)
+      : await supabase.from('products').update(dataToSave).eq('id', id);
+
     if (error) alert(error.message); else { fetchData(); setView('products'); }
   };
 
   const handleSaveCatalog = async (catalog: Partial<Catalog>) => {
     if (!user) return;
-    const dataToSave: any = {
+    const id = catalog.id;
+    const isNew = !id;
+    const dataToSave: any = sanitizePayload({
       ...catalog,
       user_id: user.id,
       cover_image: catalog.coverImage,
       logo_url: catalog.logoUrl,
       product_ids: catalog.productIds
-    };
+    });
     delete dataToSave.coverImage;
     delete dataToSave.logoUrl;
     delete dataToSave.productIds;
-    delete dataToSave.createdAt;
-    const { error } = await supabase.from('catalogs').upsert(dataToSave);
+
+    const { error } = isNew 
+      ? await supabase.from('catalogs').insert(dataToSave)
+      : await supabase.from('catalogs').update(dataToSave).eq('id', id);
+
     if (error) alert(error.message); else { fetchData(); setEditingCatalog(null); }
   };
 
   const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
     if (!user) return;
-    const dataToSave: any = {
+    const id = quotation.id;
+    const isNew = !id;
+    const dataToSave: any = sanitizePayload({
       ...quotation,
       user_id: user.id,
       client_name: quotation.clientName,
       client_phone: quotation.clientPhone,
       seller_name: quotation.sellerName,
       quotation_date: quotation.quotationDate
-    };
+    });
     delete dataToSave.clientName;
     delete dataToSave.clientPhone;
     delete dataToSave.sellerName;
     delete dataToSave.quotationDate;
-    delete dataToSave.createdAt;
-    const { error } = await supabase.from('quotations').upsert(dataToSave);
+
+    const { error } = isNew 
+      ? await supabase.from('quotations').insert(dataToSave)
+      : await supabase.from('quotations').update(dataToSave).eq('id', id);
+
     if (error) {
-      console.error('Erro ao salvar orçamento:', error);
       alert('Erro ao salvar orçamento: ' + error.message);
     } else { 
       fetchData(); 
@@ -420,24 +445,23 @@ const App: React.FC = () => {
 
   const handleSaveCompany = async (companyData: Partial<Company>) => {
     if (!user) return;
-    const dataToSave = { ...companyData };
-    delete dataToSave.createdAt;
-    if (dataToSave.id === undefined) delete dataToSave.id;
+    const dataToSave = sanitizePayload({ ...companyData });
+    
     const { error } = await supabase
       .from('companies')
       .upsert({
         ...dataToSave,
         user_id: user.id
       }, { onConflict: 'user_id' });
+      
     if (error) {
-      console.error('Erro Supabase (Company Save):', error);
       alert('Erro ao salvar dados da empresa: ' + error.message);
     } else {
       fetchData();
     }
   };
 
-  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation', id: string, name: string) => {
+  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation', id: number | string, name: string) => {
     setDeleteModal({ isOpen: true, type, id, title: 'Excluir Item', message: `Deseja excluir "${name}"?` });
   };
 
@@ -470,6 +494,8 @@ const App: React.FC = () => {
         company={company}
         isLoading={isLoadingData}
         error={publicCatalogError}
+        // Passamos as categorias para a vitrine ter os filtros de subcategoria
+        categories={categories}
         onBack={() => {
           if (user) setView('catalogs'); else setView('login');
           safeReplaceState(window.location.pathname);
@@ -528,14 +554,15 @@ const App: React.FC = () => {
             <h2 className="text-lg lg:text-xl font-black text-slate-800 tracking-tight">{viewTitles[view]}</h2>
           </div>
           <div className="flex items-center gap-3">
-             <button onClick={() => {
-              if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
-              else if (view === 'quotations') setView('quotation-form');
-              else if (view === 'catalogs') setEditingCatalog('new');
-              else { setEditingProduct(undefined); setIsCloning(false); setView('product-form'); }
-            }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
-              <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
-            </button>
+            {['products', 'customers', 'quotations'].includes(view) && (
+              <button onClick={() => {
+                if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
+                else if (view === 'quotations') setView('quotation-form');
+                else { setEditingProduct(undefined); setIsCloning(false); setView('product-form'); }
+              }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
+                <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
+              </button>
+            )}
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">

@@ -39,6 +39,43 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Máscara CPF/CNPJ
+  const maskCPFCNPJ = (value: string) => {
+    const val = value.replace(/\D/g, '');
+    if (val.length <= 11) {
+      return val
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+        .replace(/(-\d{2})\d+?$/, '$1');
+    } else {
+      return val
+        .replace(/(\d{2})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+        .replace(/(-\d{2})\d+?$/, '$1');
+    }
+  };
+
+  // Máscara CEP
+  const maskCEP = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/(\d{5})(\d)/, '$1-$2')
+      .replace(/(-\d{3})\d+?$/, '$1');
+  };
+
+  const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const maskedValue = maskCPFCNPJ(e.target.value);
+    setFormData(prev => ({ ...prev, document: maskedValue }));
+  };
+
+  const handleCEPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const maskedValue = maskCEP(e.target.value);
+    setFormData(prev => ({ ...prev, zipCode: maskedValue }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.phone) {
@@ -120,7 +157,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                 <input 
                   type="text" 
                   value={formData.document}
-                  onChange={e => setFormData({...formData, document: e.target.value})}
+                  onChange={handleDocumentChange}
                   placeholder="000.000.000-00"
                   className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
                 />
@@ -144,7 +181,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
               <input 
                 type="text" 
                 value={formData.zipCode}
-                onChange={e => setFormData({...formData, zipCode: e.target.value})}
+                onChange={handleCEPChange}
                 placeholder="00000-000"
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
               />

@@ -24,29 +24,30 @@ import { Quotation, QuotationStatus } from '../types';
 interface QuotationListProps {
   quotations: Quotation[];
   onEdit: (quotation: Quotation) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: number | string) => void;
 }
 
 const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<QuotationStatus | 'all'>('all');
   const [printQuotation, setPrintQuotation] = useState<Quotation | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<(number | string)[]>([]);
 
   const filteredQuotations = useMemo(() => {
     return quotations.filter(q => {
+      const qIdStr = String(q.id).toLowerCase();
       const matchesSearch = 
         q.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
         q.clientPhone.includes(searchTerm) ||
         q.sellerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.keyword?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.id.toLowerCase().includes(searchTerm.toLowerCase());
+        (q.keyword && q.keyword.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        qIdStr.includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [quotations, searchTerm, statusFilter]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (id: number | string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
@@ -74,7 +75,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
     };
 
     const message = encodeURIComponent(
-      `Olá, *${quotation.clientName}*!\nAtualização do seu pedido/orçamento:\n\n*Situação:* ${statusMap[quotation.status]}\n\n*Itens:*\n${itemsList}\n\n*Total: R$ ${quotation.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n${quotation.notes ? `*Observações:* ${quotation.notes}\n\n` : ''}Vendedor: ${quotation.sellerName}\nComo podemos prosseguir? 😊`
+      `Olá, *${quotation.clientName}*!\nAtualização do seu pedido/orçamento:\n\n*Situação:* ${statusMap[quotation.status]}\n\n*Itens:*\n${itemsList}\n\n*Total: R$ ${quotation.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*\n\n${quotation.notes ? `*Observações:* ${quotation.notes}\n\n` : ''}Vendedor: ${quotation.sellerName}\nComo podemos prosseguir? 😊`
     );
     
     const phone = quotation.clientPhone.replace(/\D/g, '');
@@ -114,7 +115,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
             </div>
             <div className="text-right">
               <h2 className="text-xl font-black uppercase text-indigo-600">Orçamento / Pedido</h2>
-              <p className="text-sm font-bold">Nº {printQuotation.id.toUpperCase()}</p>
+              <p className="text-sm font-bold">Nº {String(printQuotation.id).toUpperCase()}</p>
               <p className="text-xs text-slate-400">Emissão: {new Date(printQuotation.createdAt).toLocaleString('pt-BR')}</p>
               <p className="text-xs text-slate-400">Data Orçamento: {new Date(printQuotation.quotationDate).toLocaleDateString('pt-BR')}</p>
             </div>
@@ -159,9 +160,9 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
                       <p className="font-black text-slate-800 text-sm">{item.name}</p>
                     </td>
                     <td className="px-4 py-4 text-center font-bold text-sm">{item.quantity}</td>
-                    <td className="px-4 py-4 text-right text-sm">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-4 text-right text-sm text-red-500">- R$ {item.discount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-4 text-right font-black text-slate-900 text-sm">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-4 text-right text-sm">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-4 text-right text-sm text-red-500">- R$ {item.discount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-4 text-right font-black text-slate-900 text-sm">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 );
               })}
@@ -178,15 +179,15 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
             <div className="w-64 space-y-2">
               <div className="flex justify-between items-center text-slate-400">
                 <span className="text-[10px] font-black uppercase">Subtotal Bruto:</span>
-                <span className="text-sm font-bold">R$ {printQuotation.items.reduce((a, b) => a + (b.price * b.quantity), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-sm font-bold">R$ {printQuotation.items.reduce((a, b) => a + (b.price * b.quantity), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center text-red-400">
                 <span className="text-[10px] font-black uppercase">Total Descontos:</span>
-                <span className="text-sm font-bold">- R$ {printQuotation.items.reduce((a, b) => a + b.discount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-sm font-bold">- R$ {printQuotation.items.reduce((a, b) => a + b.discount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="pt-4 border-t-2 border-slate-900 flex justify-between items-center">
                 <span className="text-sm font-black uppercase">Total Final:</span>
-                <span className="text-2xl font-black text-indigo-600">R$ {printQuotation.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-2xl font-black text-indigo-600">R$ {printQuotation.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
@@ -260,6 +261,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
                 {filteredQuotations.map(q => {
                   const style = getStatusStyle(q.status);
                   const isSelected = selectedIds.includes(q.id);
+                  const qIdStr = String(q.id);
                   return (
                     <tr key={q.id} className={`group hover:bg-slate-50/80 transition-all ${isSelected ? 'bg-indigo-50/30' : ''}`}>
                       <td className="px-6 py-4">
@@ -275,7 +277,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
                         </button>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="font-mono text-xs font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md uppercase">#{q.id.substr(0, 5)}</span>
+                        <span className="font-mono text-xs font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md uppercase">#{qIdStr.substr(0, 5)}</span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
@@ -303,7 +305,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
                       </td>
                       <td className="px-4 py-4">
                         <span className="font-black text-indigo-600 text-sm">
-                          R$ {q.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          R$ {q.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -351,6 +353,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
           {filteredQuotations.map(q => {
             const style = getStatusStyle(q.status);
             const isSelected = selectedIds.includes(q.id);
+            const qIdStr = String(q.id);
             return (
               <div 
                 key={q.id}
@@ -363,7 +366,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
                     {style.label}
                   </div>
                   <span className="font-mono text-[10px] font-black text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                    #{q.id.substr(0, 5).toUpperCase()}
+                    #{qIdStr.substr(0, 5).toUpperCase()}
                   </span>
                 </div>
 
@@ -375,7 +378,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, onEdit, onDel
                   <div className="text-right shrink-0">
                     <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-0.5">Total</p>
                     <p className="text-lg font-black text-indigo-600 tracking-tighter">
-                      R$ {q.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {q.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </div>

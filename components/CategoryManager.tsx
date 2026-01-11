@@ -11,10 +11,12 @@ interface CategoryManagerProps {
 }
 
 const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onRefresh }) => {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  // Fix: ID can be number or string
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Fix: ID can be number or string
+  const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -77,7 +79,8 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
     }
   };
 
-  const removeCategory = async (id: string) => {
+  // Fix: category ID can be number or string
+  const removeCategory = async (id: string | number) => {
     if (!window.confirm('Excluir esta categoria e todas as suas subcategorias?')) return;
     
     setIsBusy(true);
@@ -122,7 +125,8 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
     }
   };
 
-  const removeSubcategory = async (subId: string) => {
+  // Fix: subcategory ID can be number or string
+  const removeSubcategory = async (subId: string | number) => {
     setIsBusy(true);
     try {
       const { error } = await supabase.from('subcategories').delete().eq('id', subId);
@@ -138,14 +142,15 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
     }
   };
 
-  const startEditing = (id: string, currentName: string) => {
+  // Fix: ID can be number or string
+  const startEditing = (id: string | number, currentName: string) => {
     setEditingId(id);
     setEditValue(currentName);
   };
 
   const saveEdit = async (type: 'cat' | 'sub') => {
     const value = editValue.trim();
-    if (!editingId || !value) {
+    if (editingId === null || !value) {
       setEditingId(null);
       return;
     }

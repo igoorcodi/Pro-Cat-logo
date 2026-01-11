@@ -21,7 +21,8 @@ import { Customer } from '../types';
 interface CustomerListProps {
   customers: Customer[];
   onEdit: (customer: Customer) => void;
-  onDelete: (id: string) => void;
+  // Fix: customer ID can be number or string
+  onDelete: (id: string | number) => void;
   onAdd: () => void;
 }
 

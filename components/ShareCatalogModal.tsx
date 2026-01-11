@@ -55,7 +55,8 @@ const ShareCatalogModal: React.FC<ShareCatalogModalProps> = ({ catalog, onClose 
     const identifier = catalog.slug || catalog.id;
     try {
       const url = new URL(window.location.origin + window.location.pathname);
-      url.searchParams.set('c', identifier);
+      // Fix: identifier can be number or string, set expects string
+      url.searchParams.set('c', String(identifier));
       return url.toString();
     } catch (e) {
       return `${window.location.origin}${window.location.pathname}?c=${identifier}`;

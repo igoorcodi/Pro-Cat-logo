@@ -27,40 +27,6 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-
-        /* Classes Utilitárias */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-
-        /* Estilos de Impressão */
-        @media print {
-            body {
-                background-color: white !important;
-                -webkit-print-color-adjust: exact;
-            }
-            aside, header, nav, .bulk-actions-bar, .no-print, button, select, input {
-                display: none !important;
-            }
-            main {
-                padding: 0 !important;
-                margin: 0 !important;
-                width: 100% !important;
-            }
-            .print-only {
-                display: block !important;
-            }
-            #root {
-                display: block !important;
-            }
-        }
-        .print-only {
-            display: none;
-        }
     </style>
 <script type="importmap">
 {
