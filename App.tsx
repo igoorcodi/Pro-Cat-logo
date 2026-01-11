@@ -111,10 +111,13 @@ const App: React.FC = () => {
 
   const safeReplaceState = (url: string) => {
     try {
-      const cleanUrl = window.location.origin + window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
+      if (window.history && window.history.replaceState) {
+        // Tenta usar apenas o path se possível, ou o URL completo
+        const cleanUrl = url || (window.location.origin + window.location.pathname);
+        window.history.replaceState({}, '', cleanUrl);
+      }
     } catch (e) {
-      console.warn('Falha ao atualizar URL:', e);
+      console.warn('Falha segura: O navegador impediu a atualização da URL via script (ambiente restrito/blob).', e);
     }
   };
 
@@ -497,7 +500,7 @@ const App: React.FC = () => {
         categories={categories}
         onBack={() => {
           if (user) setView('catalogs'); else setView('login');
-          safeReplaceState(window.location.pathname);
+          safeReplaceState('');
         }} 
       />
     );

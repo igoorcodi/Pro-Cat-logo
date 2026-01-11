@@ -93,6 +93,16 @@ export interface Product {
   createdAt: string;
 }
 
+export interface CartItem {
+  id: string; // unique id for cart entry (prodId + subId)
+  productId: number | string;
+  productName: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  selectedSub?: Subcategory | null;
+}
+
 export interface QuotationItem {
   productId: number | string;
   name: string;
