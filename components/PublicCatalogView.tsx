@@ -70,10 +70,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   // Sincronizar carrinho com LocalStorage e URL para compartilhamento
   useEffect(() => {
     if (catalog?.id) {
-      // Persistência local sempre garantida
       localStorage.setItem(`cart_${catalog.id}`, JSON.stringify(cart));
       
-      // Tentativa segura de atualizar URL para Deep Linking
       try {
         const params = new URLSearchParams(window.location.search);
         if (cart.length > 0) {
@@ -85,13 +83,11 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         const searchString = params.toString();
         const newUrl = searchString ? `?${searchString}` : window.location.pathname;
         
-        // replaceState pode falhar em ambientes de blob ou sandbox
         if (window.history && window.history.replaceState) {
           window.history.replaceState({}, '', newUrl);
         }
       } catch (e) {
-        // Ignora erros de segurança silenciosamente para não quebrar a experiência do usuário
-        console.warn('Não foi possível atualizar a URL do carrinho devido a restrições do navegador.');
+        console.warn('Falha segura: O navegador impediu a atualização da URL via script.');
       }
     }
   }, [cart, catalog?.id]);
@@ -226,7 +222,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           <div className="flex items-center gap-3 flex-1 max-w-sm">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-full text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-full text-xs focus:ring-2 focus:ring-indigo-50 outline-none" />
             </div>
             <button onClick={() => setIsCartOpen(true)} className="relative p-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 shadow-sm transition-all active:scale-90">
                 <ShoppingCart size={20} />
@@ -293,6 +289,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     <span className="text-xs font-black uppercase tracking-tighter text-center">Imagem Indisponível</span>
                   </div>
                 )}
+                {/* Aumento do Código do Produto na Vitrine */}
+                <div className="absolute top-4 left-4">
+                    <span className="bg-slate-900/90 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-xl shadow-lg border border-white/10">
+                      #{String(product.id).substring(0, 8)}
+                    </span>
+                </div>
                 <div className="absolute top-4 right-4 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={(e) => { e.stopPropagation(); addToCart(product); }}
@@ -322,10 +324,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         )}
       </main>
 
-      {/* Footer Section - Company Information */}
       <footer className="bg-white border-t border-slate-200 py-12 px-6 mt-auto">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-          {/* Column 1: Brand & Bio */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               {displayLogoUrl ? (
@@ -348,7 +348,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             )}
           </div>
 
-          {/* Column 2: Contact */}
           <div className="space-y-4">
             <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Canais de Contato</h5>
             <ul className="space-y-3">
@@ -383,7 +382,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             </ul>
           </div>
 
-          {/* Column 3: Location */}
           <div className="space-y-4">
             <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Onde Estamos</h5>
             {company?.address ? (
@@ -403,7 +401,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             )}
           </div>
 
-          {/* Column 4: Social */}
           <div className="space-y-4">
             <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Siga-nos</h5>
             <div className="flex gap-3">
@@ -417,7 +414,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   <Instagram size={20} />
                 </a>
               )}
-              {/* Fallback Globe icon if no socials are set */}
               {!company?.instagram && (
                 <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
                   <Globe size={20} />
@@ -430,7 +426,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           </div>
         </div>
 
-        {/* Bottom Credits */}
         <div className="max-w-7xl mx-auto pt-12 mt-12 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 opacity-30 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
           <div className="flex items-center gap-2">
             <ShoppingCart size={14} />
@@ -440,7 +435,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       </footer>
 
-      {/* Floating Cart Button for Mobile */}
       {cart.length > 0 && !isCartOpen && (
         <button 
           onClick={() => setIsCartOpen(true)}
@@ -453,7 +447,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </button>
       )}
 
-      {/* Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)} />
@@ -475,6 +468,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div>
+                        {/* Código em destaque no carrinho */}
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">#{String(item.productId).substring(0, 8)}</p>
                         <h4 className="font-bold text-slate-800 text-sm truncate">{item.productName}</h4>
                         {item.selectedSub && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{item.selectedSub.name}</p>}
                         <p className="text-xs font-black text-slate-400 mt-1">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -536,7 +531,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       )}
 
-      {/* Product View Modal */}
       {viewingProduct && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 duration-500 flex flex-col sm:flex-row max-h-[90vh] sm:max-h-[80vh]">
@@ -549,6 +543,11 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                    <p className="text-[10px] font-black uppercase tracking-widest">Imagem indisponível</p>
                 </div>
               )}
+              <div className="absolute top-4 left-4">
+                  <span className="bg-slate-900/90 backdrop-blur-md text-white text-[12px] font-black uppercase tracking-widest px-4 py-1.5 rounded-xl shadow-2xl border border-white/20">
+                    Cód: #{String(viewingProduct.id).substring(0, 8)}
+                  </span>
+              </div>
               <button onClick={() => setViewingProduct(null)} className="absolute top-4 right-4 p-2 bg-slate-900/40 backdrop-blur-md text-white rounded-full sm:hidden transition-transform active:scale-90"><X size={24} /></button>
             </div>
             <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto">

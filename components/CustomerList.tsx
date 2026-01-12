@@ -153,9 +153,10 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                     {(customer.name || '?')[0]}
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-slate-900 text-white text-[9px] font-black px-2 py-0.5 rounded-md border border-slate-800 uppercase tracking-widest">
-                        Cód: #{customerId.length > 8 ? customerId.substring(0, 8) + '...' : customerId}
+                    {/* Aumento do Código na Grade de Clientes */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="bg-slate-900 text-white text-[11px] font-black px-3 py-1 rounded-lg border border-slate-800 uppercase tracking-widest shadow-sm">
+                        #{customerId.substring(0, 8)}
                       </span>
                     </div>
                     <h4 className="text-xl font-black text-slate-800 tracking-tight leading-tight truncate">{customer.name || 'Sem nome'}</h4>
@@ -227,7 +228,10 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                 {filteredCustomers.map(customer => (
                   <tr key={customer.id} onClick={() => onEdit(customer)} className="group hover:bg-slate-50/80 transition-all cursor-pointer">
                     <td className="px-8 py-5">
-                      <span className="font-mono text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md">#{customer.id}</span>
+                      {/* Código maior na tabela de listagem */}
+                      <span className="font-mono text-xs font-black text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-md border border-slate-200">
+                        #{customer.id}
+                      </span>
                     </td>
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-4">
@@ -279,8 +283,11 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                         {(customer.name || '?')[0]}
                       </div>
                       <div className="min-w-0">
+                        {/* Código maior no mobile */}
                         <div className="flex items-center gap-2">
-                           <span className="text-[8px] font-black text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-100">Cód: #{customerId.substring(0, 6)}</span>
+                           <span className="text-[10px] font-black text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                             Cód: #{customerId.substring(0, 8)}
+                           </span>
                            <h4 className="font-bold text-slate-800 text-sm truncate">{customer.name || 'Sem nome'}</h4>
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">

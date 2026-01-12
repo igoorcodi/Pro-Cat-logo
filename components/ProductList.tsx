@@ -158,12 +158,13 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                   </div>
                 )}
                 
+                {/* Aumento do Código na Grade Administrativa */}
                 <div className="absolute top-1.5 left-1.5 flex flex-col gap-0.5 pointer-events-none">
-                  <span className="bg-slate-900/80 backdrop-blur-md text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md">
-                    #{String(product.id).substring(0, 5)}
+                  <span className="bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg shadow-lg">
+                    #{String(product.id).substring(0, 8)}
                   </span>
                   {product.sku && (
-                    <span className="bg-indigo-600/80 backdrop-blur-md text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md">
+                    <span className="bg-indigo-600/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg shadow-lg">
                       {product.sku}
                     </span>
                   )}
@@ -189,7 +190,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Mobile List View (Hidden on MD) */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {filteredAndSortedProducts.map(product => (
               <div key={product.id} onClick={() => onEdit(product)} className="bg-white p-3 rounded-2xl border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all">
@@ -202,7 +202,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[8px] font-black text-slate-400 uppercase bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">#{String(product.id).substring(0, 5)}</span>
+                    <span className="text-[10px] font-black text-slate-600 uppercase bg-slate-50 px-2 py-0.5 rounded border border-slate-100">#{String(product.id).substring(0, 8)}</span>
                     <span className="text-[8px] font-black text-indigo-400 uppercase truncate">{product.category || 'Geral'}</span>
                   </div>
                   <h4 className="font-bold text-slate-800 text-xs truncate mt-0.5">{product.name}</h4>
@@ -220,7 +220,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
             ))}
           </div>
 
-          {/* Desktop Table View (Hidden on Mobile) */}
           <div className="hidden md:block bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto scrollbar-hide">
               <table className="w-full">
@@ -249,7 +248,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                   {filteredAndSortedProducts.map(product => (
                     <tr key={product.id} onClick={() => onEdit(product)} className="hover:bg-slate-50 transition-all cursor-pointer">
                       <td className="px-4 py-3">
-                        <span className="font-mono text-[10px] font-black text-slate-400">#{product.id}</span>
+                        {/* Código Maior na Tabela */}
+                        <span className="font-mono text-xs font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-md">#{product.id}</span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[11px] font-black uppercase tracking-widest border border-slate-200">
                           {product.sku || 'N/A'}
                         </span>
                       </td>

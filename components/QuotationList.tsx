@@ -97,24 +97,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
   };
 
-  const handleSendEmail = (quotation: Quotation) => {
-    const customer = getCustomerData(quotation.clientName);
-    const email = customer?.email || '';
-    
-    const subject = encodeURIComponent(`Orçamento - ${company?.trading_name || company?.name || 'Catálogo Pro'} - #${String(quotation.id).substr(0, 8)}`);
-    
-    const itemsList = (quotation.items || []).map(item => {
-      const subtotal = ((item.price || 0) * (item.quantity || 0)) - (item.discount || 0);
-      return `- ${item.name} (${item.quantity}x): R$ ${subtotal.toLocaleString('pt-BR')}`;
-    }).join('\n');
-
-    const body = encodeURIComponent(
-      `Olá, ${quotation.clientName}!\n\nSegue o detalhamento do seu orçamento solicitado:\n\nItens:\n${itemsList}\n\nTotal Geral: R$ ${quotation.total.toLocaleString('pt-BR')}\n\nEstamos à disposição para tirar qualquer dúvida.\n\nAtenciosamente,\n${quotation.sellerName}\n${company?.name || ''}`
-    );
-
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-  };
-
   const getStatusStyle = (status: QuotationStatus) => {
     switch (status) {
       case 'delivered': return { bg: 'bg-emerald-50', text: 'text-emerald-600', icon: <PackageCheck size={14} />, label: 'Entregue' };
@@ -130,7 +112,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      {/* Estilos para Impressão real */}
       <style>
         {`
           @media print {
@@ -164,10 +145,8 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
         `}
       </style>
 
-      {/* Visualização de Impressão / Preview */}
       {printQuotation && (
         <div id="print-area-wrapper" className="fixed inset-0 bg-slate-50 z-[9999] overflow-y-auto font-sans text-black no-scrollbar">
-          {/* Barra de Ações - Oculta na Impressão Física */}
           <div className="sticky top-0 left-0 right-0 bg-slate-900 text-white p-3 sm:p-4 flex items-center justify-between shadow-2xl z-[10000] no-print">
             <div className="flex items-center gap-2 sm:gap-4">
               <button onClick={() => setPrintQuotation(null)} className="p-2 hover:bg-slate-800 rounded-xl transition-all">
@@ -175,7 +154,8 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
               </button>
               <div className="hidden sm:block">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visualizando Orçamento</p>
-                <h4 className="font-bold text-sm">Nº {String(printQuotation.id).substring(0, 8).toUpperCase()}</h4>
+                {/* Aumento do Código na Barra de Ferramentas */}
+                <h4 className="font-black text-base">ID: #{String(printQuotation.id).substring(0, 8).toUpperCase()}</h4>
               </div>
             </div>
             
@@ -197,7 +177,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
 
           <div id="quotation-print-area" className="p-0 sm:px-10 sm:pt-6 sm:pb-20 max-w-5xl mx-auto print:p-0">
             <div className="bg-white min-h-screen sm:min-h-0 sm:rounded-[2.5rem] shadow-xl p-6 sm:p-12 print-document">
-                {/* Cabeçalho Profissional */}
                 <div className="flex flex-col sm:flex-row justify-between items-start border-b-4 border-slate-900 pb-6 sm:pb-8 mb-8 sm:mb-10 print-border-indigo gap-6">
                 <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-center sm:items-start text-center sm:text-left w-full sm:w-auto">
                     {company?.logo_url ? (
@@ -221,19 +200,19 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                     </div>
                     </div>
                 </div>
-                <div className="text-center sm:text-right flex flex-col justify-between w-full sm:w-auto h-auto sm:h-24">
+                <div className="text-center sm:text-right flex flex-col justify-between w-full sm:w-auto h-auto sm:h-28">
                     <div>
                     <h2 className="text-xl sm:text-2xl font-black uppercase text-indigo-600 tracking-tight">Orçamento</h2>
-                    <p className="text-xs sm:text-sm font-black text-slate-400">Nº {String(printQuotation.id || '').toUpperCase().substr(0, 8)}</p>
+                    {/* Aumento Considerável do Código na Impressão */}
+                    <p className="text-lg sm:text-3xl font-black text-slate-900 mt-1">Nº {String(printQuotation.id || '').toUpperCase().substr(0, 8)}</p>
                     </div>
-                    <div className="text-[9px] sm:text-[10px] font-black uppercase text-slate-400 space-y-0.5 mt-2 sm:mt-0">
+                    <div className="text-[9px] sm:text-[11px] font-black uppercase text-slate-400 space-y-0.5 mt-2 sm:mt-0">
                     <p>Emissão: {new Date(printQuotation.createdAt || 0).toLocaleString('pt-BR')}</p>
                     <p>Vendedor: <span className="text-slate-900">{printQuotation.sellerName || 'N/A'}</span></p>
                     </div>
                 </div>
                 </div>
 
-                {/* Seção Dados do Cliente */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 sm:gap-8 mb-8 sm:mb-10">
                 <div className="col-span-1 sm:col-span-8 bg-slate-50 p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 print-bg-slate">
                     <div className="flex items-center gap-2 mb-3 sm:mb-4 text-indigo-600">
@@ -277,7 +256,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                 </div>
                 </div>
 
-                {/* Tabela de Itens Responsiva */}
                 <div className="overflow-x-auto mb-8 sm:mb-10 no-scrollbar rounded-xl sm:rounded-3xl border border-slate-100">
                     <table className="w-full border-collapse min-w-[600px] print:min-w-0">
                     <thead>
@@ -308,7 +286,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                     </table>
                 </div>
 
-                {/* Resumo e Observações */}
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-8 sm:gap-12 mb-12 sm:mb-16">
                 <div className="w-full sm:flex-1">
                     <p className="text-[9px] sm:text-[10px] font-black uppercase text-slate-400 mb-2 sm:mb-3 tracking-widest flex items-center gap-2"><Info size={12}/> Observações</p>
@@ -332,7 +309,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                 </div>
                 </div>
 
-                {/* Assinaturas */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 sm:gap-16 px-4 sm:px-10 mt-8 mb-8">
                 <div className="flex flex-col items-center">
                     <div className="w-full border-t border-slate-300 mb-2"></div>
@@ -347,7 +323,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                 </div>
                 </div>
 
-                {/* Rodapé */}
                 <div className="mt-8 pt-6 border-t border-slate-50 flex flex-col items-center text-center opacity-20">
                     <div className="flex items-center gap-2">
                         <Package size={12} />
@@ -359,7 +334,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
         </div>
       )}
 
-      {/* Interface Web (Não impressa) */}
       <div className="space-y-6">
         <div className="flex flex-col xl:flex-row gap-4 items-center justify-between">
           <div className="relative w-full xl:w-1/3">
@@ -434,7 +408,7 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                         </button>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="font-mono text-xs font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-md uppercase">#{qIdStr.substr(0, 5)}</span>
+                        <span className="font-mono text-xs font-black text-slate-600 bg-slate-100 px-2 py-1 rounded-md uppercase">#{qIdStr.substr(0, 8)}</span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
@@ -497,8 +471,8 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                     {style.icon}
                     {style.label}
                   </div>
-                  <span className="font-mono text-[10px] font-black text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                    #{qIdStr.substr(0, 5).toUpperCase()}
+                  <span className="font-mono text-[11px] font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-md">
+                    #{qIdStr.substr(0, 8).toUpperCase()}
                   </span>
                 </div>
 

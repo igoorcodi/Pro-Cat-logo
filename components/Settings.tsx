@@ -39,9 +39,11 @@ import {
   MapPin,
   CreditCard,
   Building,
-  PartyPopper
+  PartyPopper,
+  Clock,
+  UserCheck
 } from 'lucide-react';
-import { Product, Category, User, UserPermissions, PermissionLevel, Company } from '../types';
+import { Product, Category, User, UserPermissions, PermissionLevel, Company, Customer } from '../types';
 import { supabase } from '../supabase';
 
 interface SettingsViewProps {
@@ -71,7 +73,7 @@ interface AuditLog {
 const mockLogs: AuditLog[] = [];
 
 type MappingState = { [key: string]: number };
-type ImportType = 'products' | 'categories' | 'subcategories';
+type ImportType = 'products' | 'categories' | 'subcategories' | 'customers';
 
 const SettingsView: React.FC<SettingsViewProps> = ({ 
   setProducts, 
@@ -362,16 +364,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
     switch (type) {
       case 'products':
-        headers = 'nome,preço,sku,estoque,categoria,descrição,tags';
+        headers = 'nome,preço,sku,estoque,categoria,subcategorias,descrição,tags';
         filename = 'modelo_produtos.csv';
         break;
       case 'categories':
-        headers = 'nome_categoria';
+        headers = 'nome_categoria,subcategorias';
         filename = 'modelo_categorias.csv';
         break;
       case 'subcategories':
         headers = 'nome_subcategoria,nome_categoria_pai';
         filename = 'modelo_subcategorias.csv';
+        break;
+      case 'customers':
+        headers = 'nome,email,telefone,documento,cep,rua,numero,bairro,cidade,estado,notas';
+        filename = 'modelo_clientes.csv';
         break;
     }
 
@@ -394,7 +400,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       if (currentImportType === 'products') {
         const productsToInsert = csvRows.map(row => {
           const categoryName = (row[4] || '').toLowerCase();
+          const subcategoryNames = row[5] ? row[5].split(';').map(s => s.trim().toLowerCase()) : [];
+          
           const categoryObj = categories.find(c => (c.name || '').toLowerCase() === categoryName);
+          
+          let subIds: (string | number)[] = [];
+          if (categoryObj && categoryObj.subcategories) {
+            subIds = categoryObj.subcategories
+              .filter(s => subcategoryNames.includes((s.name || '').toLowerCase()))
+              .map(s => s.id);
+          }
 
           return {
             name: row[0] || 'Sem Nome',
@@ -402,8 +417,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             sku: row[2] || '',
             stock: parseInt(row[3]) || 0,
             category_id: categoryObj?.id || null,
-            description: row[5] || '',
-            tags: row[6] ? row[6].split(';') : [],
+            subcategory_ids: subIds,
+            description: row[6] || '',
+            tags: row[7] ? row[7].split(';') : [],
             status: 'active',
             user_id: currentUser.id,
             images: []
@@ -413,6 +429,62 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         const { error } = await supabase.from('products').insert(productsToInsert);
         if (error) throw error;
         setImportStatus({ type: 'success', message: `${productsToInsert.length} produtos importados com sucesso!` });
+      } else if (currentImportType === 'customers') {
+        const customersToInsert = csvRows.map(row => ({
+          name: row[0] || 'Cliente Sem Nome',
+          email: row[1] || '',
+          phone: row[2] || '',
+          document: row[3] || '',
+          zip_code: row[4] || '',
+          address: row[5] || '',
+          number: row[6] || '',
+          neighborhood: row[7] || '',
+          city: row[8] || '',
+          state: row[9] || '',
+          notes: row[10] || '',
+          status: 'active',
+          user_id: currentUser.id
+        }));
+
+        const { error } = await supabase.from('customers').insert(customersToInsert);
+        if (error) throw error;
+        setImportStatus({ type: 'success', message: `${customersToInsert.length} clientes importados com sucesso!` });
+      } else if (currentImportType === 'categories') {
+        // Lógica para importar categorias e suas subcategorias
+        const categoriesToInsert = csvRows.map(row => ({
+          name: row[0] || 'Sem Nome',
+          user_id: currentUser.id
+        }));
+
+        const { data: insertedCats, error: catError } = await supabase
+          .from('categories')
+          .insert(categoriesToInsert)
+          .select();
+
+        if (catError) throw catError;
+
+        const subcatsToInsert: any[] = [];
+        csvRows.forEach((row, index) => {
+          const subNames = row[1] ? row[1].split(';').map(s => s.trim()).filter(Boolean) : [];
+          const parentCat = insertedCats?.find(c => c.name === (row[0] || 'Sem Nome'));
+          
+          if (parentCat) {
+            subNames.forEach(subName => {
+              subcatsToInsert.push({
+                name: subName,
+                category_id: parentCat.id,
+                user_id: currentUser.id
+              });
+            });
+          }
+        });
+
+        if (subcatsToInsert.length > 0) {
+          const { error: subError } = await supabase.from('subcategories').insert(subcatsToInsert);
+          if (subError) throw subError;
+        }
+
+        setImportStatus({ type: 'success', message: `${insertedCats?.length} categorias e ${subcatsToInsert.length} subcategorias importadas!` });
       } else {
         setImportStatus({ type: 'error', message: 'Tipo de importação não implementado ainda.' });
       }
@@ -430,7 +502,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500 pb-10">
-      {/* Navegação de Configurações Responsiva */}
       <aside className="w-full lg:w-72 flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 scrollbar-hide shrink-0 snap-x snap-mandatory">
         <h3 className="hidden lg:block text-[10px] font-black text-slate-400 px-4 mb-6 uppercase tracking-widest">Painel de Controle</h3>
         <SettingsTab icon={<UserIcon size={20} />} label="Perfil" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
@@ -584,8 +655,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <input type="text" value={companyFormData.address || ''} onChange={e => setCompanyFormData({...companyFormData, address: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" />
                   </div>
                   <div className="md:col-span-3 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Número</label>
+                    <input type="text" value={companyFormData.number || ''} onChange={e => setCompanyFormData({...companyFormData, number: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" placeholder="123" />
+                  </div>
+                  <div className="md:col-span-4 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Bairro</label>
+                    <input type="text" value={companyFormData.neighborhood || ''} onChange={e => setCompanyFormData({...companyFormData, neighborhood: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" />
+                  </div>
+                  <div className="md:col-span-5 space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Cidade</label>
                     <input type="text" value={companyFormData.city || ''} onChange={e => setCompanyFormData({...companyFormData, city: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" />
+                  </div>
+                  <div className="md:col-span-3 space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">UF</label>
+                    <input type="text" maxLength={2} value={companyFormData.state || ''} onChange={e => setCompanyFormData({...companyFormData, state: e.target.value.toUpperCase()})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none text-center" placeholder="SP" />
                   </div>
                 </div>
               </div>
@@ -604,6 +687,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
+        {(activeTab === 'users' || activeTab === 'audit') && (
+          <div className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-4 animate-in fade-in zoom-in duration-500">
+            <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center shadow-inner">
+              <Clock size={40} />
+            </div>
+            <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Em Desenvolvimento</h4>
+            <p className="text-slate-500 font-medium max-w-sm">
+              Estamos trabalhando duro para trazer esta funcionalidade de {activeTab === 'users' ? 'gerenciamento de equipe' : 'auditoria de sistema'} em breve. Fique atento às próximas atualizações!
+            </p>
+          </div>
+        )}
+
         {activeTab === 'import' && (
           <div className="p-6 lg:p-10 space-y-10 animate-in slide-in-from-right-4 duration-500">
             <div>
@@ -613,8 +708,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
             {!showMapping ? (
               <div className="space-y-10">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <ImportTypeCard title="Produtos" desc="Estoque e preços" icon={<Package className="text-indigo-600" size={24} />} active={currentImportType === 'products'} onClick={() => setCurrentImportType('products')} onDownload={() => downloadCSVTemplate('products')} />
+                  <ImportTypeCard title="Clientes" desc="Base de contatos" icon={<UserCheck className="text-blue-600" size={24} />} active={currentImportType === 'customers'} onClick={() => setCurrentImportType('customers')} onDownload={() => downloadCSVTemplate('customers')} />
                   <ImportTypeCard title="Categorias" desc="Estrutura principal" icon={<Tags className="text-emerald-600" size={24} />} active={currentImportType === 'categories'} onClick={() => setCurrentImportType('categories')} onDownload={() => downloadCSVTemplate('categories')} />
                 </div>
 
@@ -622,7 +718,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   <input type="file" ref={fileInputRef} onChange={handleFileSelection} accept=".csv" className="hidden" />
                   <FileUp size={48} className="text-indigo-600 group-hover:scale-110 transition-transform" />
                   <div className="text-center">
-                    <p className="text-xl font-black text-slate-800">Clique para fazer upload</p>
+                    <p className="text-xl font-black text-slate-800">Clique para fazer upload ({currentImportType === 'products' ? 'Produtos' : currentImportType === 'customers' ? 'Clientes' : 'Categorias'})</p>
                     <p className="text-sm text-slate-400 font-medium mt-1">Formato: .CSV</p>
                   </div>
                 </div>
