@@ -41,6 +41,22 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingCEP, setIsFetchingCEP] = useState(false);
 
+  // Máscara Telefone (XX) XXXXX-XXXX
+  const maskPhone = (value: string) => {
+    let val = value.replace(/\D/g, '');
+    if (val.length > 11) val = val.substring(0, 11);
+
+    if (val.length <= 10) {
+      return val
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{4})(\d)/, '$1-$2');
+    } else {
+      return val
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{5})(\d)/, '$1-$2');
+    }
+  };
+
   // Máscara CPF/CNPJ
   const maskCPFCNPJ = (value: string) => {
     const val = value.replace(/\D/g, '');
@@ -66,6 +82,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
       .replace(/\D/g, '')
       .replace(/(\d{5})(\d)/, '$1-$2')
       .replace(/(-\d{3})\d+?$/, '$1');
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const maskedValue = maskPhone(e.target.value);
+    setFormData(prev => ({ ...prev, phone: maskedValue }));
   };
 
   const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,8 +177,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                   required
                   type="text" 
                   value={formData.phone}
-                  onChange={e => setFormData({...formData, phone: e.target.value})}
-                  placeholder="55 11 99999-9999"
+                  onChange={handlePhoneChange}
+                  placeholder="(00) 00000-0000"
                   className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
                 />
               </div>
@@ -219,7 +240,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                   value={formData.zipCode}
                   onChange={handleCEPChange}
                   placeholder="00000-000"
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
                 />
               </div>
             </div>
@@ -230,7 +251,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                 value={formData.address}
                 onChange={e => setFormData({...formData, address: e.target.value})}
                 placeholder="Ex: Av. Brasil"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
               />
             </div>
             <div className="md:col-span-3 space-y-2">
@@ -240,7 +261,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                 value={formData.number}
                 onChange={e => setFormData({...formData, number: e.target.value})}
                 placeholder="123"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
               />
             </div>
 
@@ -251,7 +272,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                 value={formData.neighborhood}
                 onChange={e => setFormData({...formData, neighborhood: e.target.value})}
                 placeholder="Centro"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
               />
             </div>
             <div className="md:col-span-5 space-y-2">
@@ -263,7 +284,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                   value={formData.city}
                   onChange={e => setFormData({...formData, city: e.target.value})}
                   placeholder="São Paulo"
-                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold"
+                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold"
                 />
               </div>
             </div>
@@ -275,7 +296,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave, onCanc
                 value={formData.state}
                 onChange={e => setFormData({...formData, state: e.target.value.toUpperCase()})}
                 placeholder="SP"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-50 outline-none font-bold text-center"
+                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-50 outline-none font-bold text-center"
               />
             </div>
           </div>

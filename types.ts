@@ -2,7 +2,7 @@
 export type UserStatus = 'active' | 'inactive';
 export type ProductStatus = 'active' | 'inactive' | 'archived';
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'admin';
-export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered';
+export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered' | 'inactive';
 export type UserRole = 'admin' | 'editor' | 'viewer';
 export type CustomerStatus = 'active' | 'inactive';
 export type StockChangeReason = 'manual_adjustment' | 'sale_delivery' | 'return' | 'initial_stock';

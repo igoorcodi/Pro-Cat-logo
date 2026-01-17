@@ -24,7 +24,7 @@ import { Customer } from '../types';
 interface CustomerListProps {
   customers: Customer[];
   onEdit: (customer: Customer) => void;
-  onDelete: (id: string | number) => void;
+  onDelete: (id: string | number, name: string) => void;
   onAdd: () => void;
 }
 
@@ -135,13 +135,13 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
               >
                 <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                    <button 
-                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEdit(customer); }} 
+                    onClick={(e) => { e.stopPropagation(); onEdit(customer); }} 
                     className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-colors"
                    >
                      <Edit2 size={18}/>
                    </button>
                    <button 
-                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(customer.id); }} 
+                    onClick={(e) => { e.stopPropagation(); onDelete(customer.id, customer.name); }} 
                     className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
                    >
                      <Trash2 size={18}/>
@@ -153,7 +153,6 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                     {(customer.name || '?')[0]}
                   </div>
                   <div className="min-w-0">
-                    {/* Aumento do Código na Grade de Clientes */}
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="bg-slate-900 text-white text-[11px] font-black px-3 py-1 rounded-lg border border-slate-800 uppercase tracking-widest shadow-sm">
                         #{customerId.substring(0, 8)}
@@ -228,7 +227,6 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                 {filteredCustomers.map(customer => (
                   <tr key={customer.id} onClick={() => onEdit(customer)} className="group hover:bg-slate-50/80 transition-all cursor-pointer">
                     <td className="px-8 py-5">
-                      {/* Código maior na tabela de listagem */}
                       <span className="font-mono text-xs font-black text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-md border border-slate-200">
                         #{customer.id}
                       </span>
@@ -259,7 +257,7 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(customer.phone); }} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><MessageCircle size={18}/></button>
                         <button onClick={(e) => { e.stopPropagation(); onEdit(customer); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={18}/></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(customer.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(customer.id, customer.name); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
                       </div>
                     </td>
                   </tr>
@@ -283,7 +281,6 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                         {(customer.name || '?')[0]}
                       </div>
                       <div className="min-w-0">
-                        {/* Código maior no mobile */}
                         <div className="flex items-center gap-2">
                            <span className="text-[10px] font-black text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-200">
                              Cód: #{customerId.substring(0, 8)}
@@ -322,7 +319,7 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
                       <Edit2 size={16} />
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); onDelete(customer.id); }}
+                      onClick={(e) => { e.stopPropagation(); onDelete(customer.id, customer.name); }}
                       className="p-2.5 bg-red-50 text-red-400 rounded-xl"
                     >
                       <Trash2 size={16} />

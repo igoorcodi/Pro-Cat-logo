@@ -89,10 +89,11 @@ const App: React.FC = () => {
 
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
-    type: 'product' | 'customer' | 'quotation';
+    type: 'product' | 'customer' | 'quotation' | 'catalog';
     id: number | string;
     title: string;
     message: string;
+    requiredText?: string;
   }>({
     isOpen: false,
     type: 'product',
@@ -162,7 +163,7 @@ const App: React.FC = () => {
           setPublicCatalogError(null);
           
           const isNumeric = /^\d+$/.test(publicCatalogId);
-          let query = supabase.from('catalogs').select('*');
+          let query = supabase.from('catalogs').select('*').eq('status', 'active');
           
           if (isNumeric) {
             query = query.or(`id.eq.${publicCatalogId},slug.eq.${publicCatalogId}`);
@@ -181,9 +182,13 @@ const App: React.FC = () => {
           const { data: catData } = await supabase
             .from('categories')
             .select('*, subcategories(*)')
-            .eq('user_id', catalogData.user_id);
+            .eq('user_id', catalogData.user_id)
+            .eq('status', 'active');
           
-          if (catData) setCategories(catData);
+          if (catData) setCategories(catData.map(c => ({
+            ...c,
+            subcategories: (c.subcategories || []).filter((s: any) => s.status === 'active')
+          })));
 
           const { data: sellerData } = await supabase
             .from('users')
@@ -197,6 +202,7 @@ const App: React.FC = () => {
               .from('companies')
               .select('*')
               .eq('user_id', sellerData.id)
+              .eq('status', 'active')
               .maybeSingle();
             
             if (companyData) setCompany(companyData);
@@ -263,9 +269,17 @@ const App: React.FC = () => {
     try {
       const fetchCategories = async () => {
         try {
-          const { data, error } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', user.id);
+          const { data, error } = await supabase
+            .from('categories')
+            .select('*, subcategories(*)')
+            .eq('user_id', user.id)
+            .eq('status', 'active');
           if (error) throw error;
-          return data || [];
+          
+          return (data || []).map(cat => ({
+            ...cat,
+            subcategories: (cat.subcategories || []).filter((s: any) => s.status === 'active')
+          }));
         } catch (e) { return []; }
       };
 
@@ -287,7 +301,12 @@ const App: React.FC = () => {
 
       const fetchCatalogs = async () => {
         try {
-          const { data, error } = await supabase.from('catalogs').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+          const { data, error } = await supabase
+            .from('catalogs')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false });
           if (error) throw error;
           if (data) setCatalogs(data.map(c => ({ 
             ...c, 
@@ -302,7 +321,12 @@ const App: React.FC = () => {
 
       const fetchQuotations = async () => {
         try {
-          const { data, error } = await supabase.from('quotations').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+          const { data, error } = await supabase
+            .from('quotations')
+            .select('*')
+            .eq('user_id', user.id)
+            .neq('status', 'inactive')
+            .order('created_at', { ascending: false });
           if (error) throw error;
           if (data) setQuotations(data.map(q => ({ ...q, clientName: q.client_name, clientPhone: q.client_phone, sellerName: q.seller_name, quotationDate: q.quotation_date, createdAt: q.created_at })));
         } catch (e) {}
@@ -318,7 +342,12 @@ const App: React.FC = () => {
 
       const fetchCompany = async () => {
         try {
-          const { data, error } = await supabase.from('companies').select('*').eq('user_id', user.id).maybeSingle();
+          const { data, error } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .maybeSingle();
           if (error) throw error;
           if (data) setCompany(data);
         } catch (e) {}
@@ -611,20 +640,41 @@ const App: React.FC = () => {
     }
   };
 
-  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation', id: number | string, name: string) => {
-    setDeleteModal({ isOpen: true, type, id, title: 'Excluir Item', message: `Deseja excluir "${name}"?` });
+  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation' | 'catalog', id: number | string, name: string) => {
+    setDeleteModal({ 
+      isOpen: true, 
+      type, 
+      id, 
+      title: type === 'catalog' ? 'Excluir Vitrine' : 'Excluir Item', 
+      message: `Deseja realmente excluir "${name}"? Esta ação não pode ser desfeita.`,
+      requiredText: type === 'catalog' ? name : undefined
+    });
   };
 
   const processDeletion = async () => {
     const { type, id } = deleteModal;
     setIsDeleting(true);
     try {
-      const table = type === 'product' ? 'products' : type === 'customer' ? 'customers' : 'quotations';
-      const { error } = type === 'quotation' ? await supabase.from(table).delete().eq('id', id) : await supabase.from(table).update({ status: 'inactive' }).eq('id', id);
+      let table = '';
+      switch (type) {
+        case 'product': table = 'products'; break;
+        case 'customer': table = 'customers'; break;
+        case 'quotation': table = 'quotations'; break;
+        case 'catalog': table = 'catalogs'; break;
+      }
+
+      const { error } = await supabase.from(table).delete().eq('id', id);
+
       if (error) throw error;
-      fetchData();
+      
+      await fetchData();
+      if (type === 'catalog') setEditingCatalog(null);
       setDeleteModal(prev => ({ ...prev, isOpen: false }));
-    } catch (err: any) { alert(err.message); } finally { setIsDeleting(false); }
+    } catch (err: any) { 
+      alert(err.message); 
+    } finally { 
+      setIsDeleting(false); 
+    }
   };
 
   if (isInitializing) {
@@ -727,7 +777,7 @@ const App: React.FC = () => {
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
           {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} quotations={quotations} />}
-          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={(id) => openDeleteConfirmation('customer', id, 'Cliente')} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
+          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={(id, name) => openDeleteConfirmation('customer', id, name)} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
           {view === 'products' && (
             <ProductList 
@@ -759,9 +809,29 @@ const App: React.FC = () => {
       
       {viewingStockHistory && <StockHistoryModal product={viewingStockHistory} onClose={() => setViewingStockHistory(null)} />}
       
-      {editingCatalog && <CatalogForm initialData={editingCatalog === 'new' ? undefined : editingCatalog} products={products} onClose={() => setEditingCatalog(null)} onSave={handleSaveCatalog} onDelete={async (id) => { await supabase.from('catalogs').delete().eq('id', id); fetchData(); setEditingCatalog(null); }} />}
+      {editingCatalog && (
+        <CatalogForm 
+          initialData={editingCatalog === 'new' ? undefined : editingCatalog} 
+          products={products} 
+          onClose={() => setEditingCatalog(null)} 
+          onSave={handleSaveCatalog} 
+          onDelete={(id) => {
+            const name = editingCatalog !== 'new' ? editingCatalog?.name || 'Catálogo' : 'Catálogo';
+            openDeleteConfirmation('catalog', id, name);
+          }} 
+        />
+      )}
       {isSharingCatalog && <ShareCatalogModal catalog={isSharingCatalog} onClose={() => setIsSharingCatalog(null)} />}
-      <ConfirmationModal isOpen={deleteModal.isOpen} title={deleteModal.title} message={deleteModal.message} onConfirm={processDeletion} onCancel={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))} isLoading={isDeleting} />
+      <ConfirmationModal 
+        isOpen={deleteModal.isOpen} 
+        title={deleteModal.title} 
+        message={deleteModal.message} 
+        onConfirm={processDeletion} 
+        onCancel={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))} 
+        isLoading={isDeleting} 
+        requireTextInput={deleteModal.requiredText}
+        textInputPlaceholder="Digite o nome da vitrine para confirmar"
+      />
       <ConfirmationModal isOpen={isLogoutConfirmationOpen} title="Sair do Sistema" message="Deseja realmente encerrar sua sessão?" confirmLabel="Sair" cancelLabel="Voltar" onConfirm={triggerLogout} onCancel={() => setIsLogoutConfirmationOpen(false)} variant="info" />
     </div>
   );

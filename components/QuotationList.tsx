@@ -81,11 +81,13 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
       return `• *${(item.name || 'Item').toUpperCase()}*\n  ${item.quantity || 0}x R$ ${(item.price || 0).toLocaleString('pt-BR')} ${item.discount > 0 ? `(-R$ ${item.discount.toLocaleString('pt-BR')})` : ''} = R$ ${subtotal.toLocaleString('pt-BR')}`;
     }).join('\n');
 
+    // Added missing 'inactive' status to satisfy Record<QuotationStatus, string>
     const statusMap: Record<QuotationStatus, string> = {
       waiting: 'Em espera',
       in_progress: 'Em execução',
       finished: 'Finalizada',
-      delivered: 'Entregue'
+      delivered: 'Entregue',
+      inactive: 'Inativo'
     };
 
     const message = encodeURIComponent(
