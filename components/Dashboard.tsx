@@ -40,6 +40,21 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
   const totalStockValue = products.reduce((sum, p) => sum + (p.price * p.stock), 0);
   const deliveredQuotations = quotations.filter(q => q.status === 'delivered');
 
+  // Cálculo do Faturamento do Dia
+  const todayRevenue = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    return deliveredQuotations
+      .filter(q => {
+        const qDate = new Date(q.createdAt || q.quotationDate);
+        return qDate >= today && qDate < tomorrow;
+      })
+      .reduce((sum, q) => sum + (q.total || 0), 0);
+  }, [deliveredQuotations]);
+
   // Calcula dinamicamente a distribuição por categoria
   const categoryDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -147,10 +162,10 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
           color="indigo"
         />
         <StatCard 
-          icon={<CheckCircle className="text-emerald-600" />} 
-          label="Pedidos Entregues" 
-          value={deliveredQuotations.length.toString()} 
-          change="Concluídos"
+          icon={<DollarSign className="text-emerald-600" />} 
+          label="Faturamento Hoje" 
+          value={`R$ ${todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+          change="Receita bruta diária"
           color="emerald"
         />
         <StatCard 
@@ -386,7 +401,7 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
                 <p className="text-2xl font-black text-indigo-700 tracking-tighter">{catalogs.length}</p>
              </div>
              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Entregas</p>
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Entregas Totais</p>
                 <p className="text-2xl font-black text-emerald-700 tracking-tighter">{deliveredQuotations.length}</p>
              </div>
           </div>
