@@ -49,6 +49,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   
   const [selectedSubForOrder, setSelectedSubForOrder] = useState<Subcategory | null>(null);
 
+  // Tema personalizado
+  const primaryColor = catalog?.primaryColor || '#4f46e5';
+
   // Inicializar carrinho da URL ou LocalStorage
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -215,19 +218,26 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             {displayLogoUrl ? (
               <img src={displayLogoUrl} className="w-8 h-8 rounded-lg object-cover" alt="Logo" />
             ) : (
-              <ShoppingCart className="text-indigo-600" size={20} />
+              <ShoppingCart style={{ color: primaryColor }} size={20} />
             )}
             <span className="font-bold text-slate-800 text-sm truncate max-w-[100px] sm:max-w-none">{company?.trading_name || company?.name || catalog?.name}</span>
           </div>
           <div className="flex items-center gap-3 flex-1 max-w-sm">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-full text-xs focus:ring-2 focus:ring-indigo-50 outline-none" />
+              <input 
+                type="text" 
+                placeholder="Buscar..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-full text-xs focus:ring-2 outline-none" 
+                style={{ '--tw-ring-color': primaryColor + '40' } as React.CSSProperties}
+              />
             </div>
             <button onClick={() => setIsCartOpen(true)} className="relative p-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 shadow-sm transition-all active:scale-90">
                 <ShoppingCart size={20} />
                 {cart.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg animate-in zoom-in">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg animate-in zoom-in" style={{ backgroundColor: primaryColor }}>
                     {cart.reduce((a, b) => a + b.quantity, 0)}
                   </span>
                 )}
@@ -251,7 +261,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       <div className="shrink-0 bg-white border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 py-4 overflow-x-auto no-scrollbar flex items-center gap-2">
           {availableCategoryNames.map(cat => (
-            <button key={cat} onClick={() => handleCategoryChange(cat)} className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest shrink-0 transition-all ${selectedCategoryName === cat ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+            <button 
+              key={cat} 
+              onClick={() => handleCategoryChange(cat)} 
+              className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest shrink-0 transition-all ${selectedCategoryName === cat ? 'text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+              style={selectedCategoryName === cat ? { backgroundColor: primaryColor } : {}}
+            >
               {cat}
             </button>
           ))}
@@ -262,11 +277,20 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">
               <Filter size={12} /> Filtro:
             </div>
-            <button onClick={() => setSelectedSubcategoryId('Todas')} className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${selectedSubcategoryId === 'Todas' ? 'bg-indigo-100 text-indigo-700' : 'bg-white border border-slate-200 text-slate-400'}`}>
+            <button 
+              onClick={() => setSelectedSubcategoryId('Todas')} 
+              className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${selectedSubcategoryId === 'Todas' ? 'bg-indigo-50' : 'bg-white border border-slate-200 text-slate-400'}`}
+              style={selectedSubcategoryId === 'Todas' ? { backgroundColor: primaryColor + '15', color: primaryColor } : {}}
+            >
               Todas
             </button>
             {currentSubcategories.map(sub => (
-              <button key={sub.id} onClick={() => setSelectedSubcategoryId(sub.id)} className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${selectedSubcategoryId === sub.id ? 'bg-indigo-100 text-indigo-700' : 'bg-white border border-slate-200 text-slate-400'}`}>
+              <button 
+                key={sub.id} 
+                onClick={() => setSelectedSubcategoryId(sub.id)} 
+                className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${selectedSubcategoryId === sub.id ? '' : 'bg-white border border-slate-200 text-slate-400'}`}
+                style={selectedSubcategoryId === sub.id ? { backgroundColor: primaryColor + '15', color: primaryColor } : {}}
+              >
                 {sub.name}
               </button>
             ))}
@@ -276,7 +300,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
       <main className="flex-1 max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8 my-8 mb-24 lg:mb-16">
         {isLoading ? (
-          <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
+          <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin" style={{ color: primaryColor }} size={32} /></div>
         ) : filteredProducts.length > 0 ? (
           filteredProducts.map(product => (
             <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-slate-100 flex flex-col cursor-pointer h-full">
@@ -289,7 +313,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     <span className="text-xs font-black uppercase tracking-tighter text-center">Imagem Indisponível</span>
                   </div>
                 )}
-                {/* Aumento do Código do Produto na Vitrine */}
                 <div className="absolute top-4 left-4">
                     <span className="bg-slate-900/90 backdrop-blur-md text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-xl shadow-lg border border-white/10">
                       #{String(product.id).substring(0, 8)}
@@ -298,7 +321,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 <div className="absolute top-4 right-4 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={(e) => { e.stopPropagation(); addToCart(product); }}
-                      className="p-3 bg-white text-indigo-600 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-600 hover:text-white transition-all active:scale-90"
+                      className="p-3 bg-white rounded-2xl shadow-xl shadow-black/5 hover:brightness-110 transition-all active:scale-90"
+                      style={{ color: primaryColor }}
                     >
                       <Plus size={20} strokeWidth={3} />
                     </button>
@@ -306,12 +330,31 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               </div>
               <div className="p-6 sm:p-7 flex flex-col flex-1 justify-between">
                 <div>
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest line-clamp-1">{product.category || 'Geral'}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest line-clamp-1" style={{ color: primaryColor }}>{product.category || 'Geral'}</span>
                   <h3 className="font-bold text-slate-800 text-lg leading-tight line-clamp-2 mb-3 mt-1.5">{product.name || 'Sem nome'}</h3>
-                  <p className="text-indigo-600 font-black text-xl">R$ {(product.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="font-black text-xl" style={{ color: primaryColor }}>R$ {(product.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
-                <button className="mt-6 w-full py-3.5 bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 group-hover:bg-indigo-600 group-hover:text-white transition-all border border-transparent group-hover:border-indigo-600 group-hover:shadow-xl group-hover:shadow-indigo-100">
-                  Ver Detalhes <ArrowRight size={14}/>
+                <button 
+                  className="mt-6 w-full py-3.5 bg-slate-50 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-transparent group-hover:text-white group-hover:shadow-xl"
+                  style={{ '--btn-color': primaryColor } as any}
+                  onClick={(e) => {
+                    // Simula efeito hover dinâmico via style
+                    const target = e.currentTarget;
+                    target.style.backgroundColor = primaryColor;
+                    target.style.borderColor = primaryColor;
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = primaryColor;
+                    e.currentTarget.style.borderColor = primaryColor;
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '';
+                    e.currentTarget.style.borderColor = '';
+                    e.currentTarget.style.color = primaryColor;
+                  }}
+                >
+                  <span style={{ color: 'inherit' }}>Ver Detalhes</span> <ArrowRight size={14}/>
                 </button>
               </div>
             </div>
@@ -331,7 +374,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               {displayLogoUrl ? (
                 <img src={displayLogoUrl} className="w-10 h-10 rounded-xl object-cover shadow-sm" alt="Logo" />
               ) : (
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: primaryColor }}>
                   <Building2 size={24} />
                 </div>
               )}
@@ -357,9 +400,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     href={`https://wa.me/${company.whatsapp.replace(/\D/g, '')}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 text-slate-600 hover:text-emerald-600 transition-colors group"
+                    className="flex items-center gap-3 text-slate-600 hover:brightness-90 transition-colors group"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:brightness-110 transition-all" style={{ backgroundColor: primaryColor + '10', color: primaryColor }}>
                       <Phone size={16} />
                     </div>
                     <span className="text-sm font-bold">{company.whatsapp}</span>
@@ -370,9 +413,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 <li>
                   <a 
                     href={`mailto:${company.email}`} 
-                    className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 transition-colors group"
+                    className="flex items-center gap-3 text-slate-600 hover:brightness-90 transition-colors group"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:brightness-110 transition-all" style={{ backgroundColor: primaryColor + '10', color: primaryColor }}>
                       <Mail size={16} />
                     </div>
                     <span className="text-sm font-bold">{company.email}</span>
@@ -438,7 +481,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       {cart.length > 0 && !isCartOpen && (
         <button 
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-6 right-6 z-50 p-5 bg-indigo-600 text-white rounded-full shadow-2xl shadow-indigo-200 lg:hidden animate-bounce flex items-center justify-center"
+          className="fixed bottom-6 right-6 z-50 p-5 text-white rounded-full shadow-2xl lg:hidden animate-bounce flex items-center justify-center"
+          style={{ backgroundColor: primaryColor, shadowColor: primaryColor + '40' }}
         >
           <ShoppingCart size={24} />
           <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-lg">
@@ -453,7 +497,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <ShoppingCart className="text-indigo-600" size={24} />
+                <ShoppingCart style={{ color: primaryColor }} size={24} />
                 <h3 className="font-black text-slate-800 uppercase tracking-tight">Seu Carrinho</h3>
               </div>
               <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-all"><X size={24}/></button>
@@ -468,17 +512,16 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div>
-                        {/* Código em destaque no carrinho */}
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">#{String(item.productId).substring(0, 8)}</p>
                         <h4 className="font-bold text-slate-800 text-sm truncate">{item.productName}</h4>
-                        {item.selectedSub && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{item.selectedSub.name}</p>}
+                        {item.selectedSub && <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: primaryColor }}>{item.selectedSub.name}</p>}
                         <p className="text-xs font-black text-slate-400 mt-1">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                       </div>
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-2 py-1">
-                          <button onClick={() => updateCartQuantity(item.id, -1)} className="p-1 text-slate-400 hover:text-indigo-600 transition-all"><Minus size={14}/></button>
+                          <button onClick={() => updateCartQuantity(item.id, -1)} className="p-1 text-slate-400 hover:brightness-75 transition-all" style={{ color: primaryColor }}><Minus size={14}/></button>
                           <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
-                          <button onClick={() => updateCartQuantity(item.id, 1)} className="p-1 text-slate-400 hover:text-indigo-600 transition-all"><Plus size={14}/></button>
+                          <button onClick={() => updateCartQuantity(item.id, 1)} className="p-1 text-slate-400 hover:brightness-75 transition-all" style={{ color: primaryColor }}><Plus size={14}/></button>
                         </div>
                         <button onClick={() => removeFromCart(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-all"><Trash2 size={16}/></button>
                       </div>
@@ -492,7 +535,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Carrinho Vazio</p>
                     <p className="text-xs font-bold text-slate-400 mt-1">Selecione produtos para continuar.</p>
                   </div>
-                  <button onClick={() => setIsCartOpen(false)} className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest">Explorar Produtos</button>
+                  <button onClick={() => setIsCartOpen(false)} className="px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest" style={{ backgroundColor: primaryColor + '10', color: primaryColor }}>Explorar Produtos</button>
                 </div>
               )}
             </div>
@@ -501,12 +544,13 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               <div className="p-6 bg-slate-900 text-white space-y-6">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Total Geral</span>
-                  <span className="text-3xl font-black text-indigo-400">R$ {cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-3xl font-black" style={{ color: primaryColor }}>R$ {cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
                     <button 
                       onClick={handleSendOrder}
-                      className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl shadow-emerald-950/20 active:scale-95 flex items-center justify-center gap-3"
+                      className="w-full py-5 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 hover:brightness-110"
+                      style={{ backgroundColor: primaryColor }}
                     >
                       <MessageCircle size={20} /> Enviar Pedido
                     </button>
@@ -553,7 +597,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto">
               <div className="hidden sm:flex justify-end mb-4"><button onClick={() => setViewingProduct(null)} className="p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-slate-200 transition-all"><X size={20} /></button></div>
               <div className="mb-6">
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{viewingProduct.category || 'Geral'}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: primaryColor }}>{viewingProduct.category || 'Geral'}</span>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-800 leading-tight mt-1">{viewingProduct.name || 'Sem nome'}</h2>
               </div>
               
@@ -582,9 +626,10 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                             onClick={() => setSelectedSubForOrder(sub)}
                             className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all border-2 ${
                               isSelected 
-                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100 scale-105' 
-                                : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-indigo-200 active:scale-95'
+                                ? 'text-white shadow-md scale-105' 
+                                : 'bg-slate-50 border-slate-100 text-slate-500 hover:brightness-95 active:scale-95'
                             }`}
+                            style={isSelected ? { backgroundColor: primaryColor, borderColor: primaryColor, boxShadow: `0 10px 15px -3px ${primaryColor}20` } : {}}
                           >
                             {isSelected && <Check size={14} className="stroke-[4]" />}
                             {sub.name}
@@ -608,8 +653,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 ${
                     viewingProductSubs.length > 0 && !selectedSubForOrder
                       ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100'
+                      : 'text-white hover:brightness-110'
                   }`}
+                  style={!(viewingProductSubs.length > 0 && !selectedSubForOrder) ? { backgroundColor: primaryColor, boxShadow: `0 10px 20px -5px ${primaryColor}40` } : {}}
                 >
                   <Plus size={20} strokeWidth={3} /> Adicionar ao Carrinho
                 </button>

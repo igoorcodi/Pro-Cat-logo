@@ -18,7 +18,8 @@ import {
   X,
   ImageOff,
   Hash,
-  ChevronUp
+  ChevronUp,
+  History
 } from 'lucide-react';
 import { Product } from '../types';
 import WhatsAppModal from './WhatsAppModal';
@@ -28,12 +29,13 @@ interface ProductListProps {
   onEdit: (product: Product) => void;
   onDelete: (id: string | number) => void;
   onDuplicate: (product: Product) => void;
+  onShowHistory: (product: Product) => void;
 }
 
 type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc' | 'newest' | 'id-asc' | 'id-desc';
 type ViewMode = 'grid' | 'list';
 
-const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, onDuplicate }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, onDuplicate, onShowHistory }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -158,7 +160,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                   </div>
                 )}
                 
-                {/* Aumento do Código na Grade Administrativa */}
                 <div className="absolute top-1.5 left-1.5 flex flex-col gap-0.5 pointer-events-none">
                   <span className="bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg shadow-lg">
                     #{String(product.id).substring(0, 8)}
@@ -172,6 +173,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
 
                 <div className="absolute bottom-1.5 right-1.5 flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300 transform lg:translate-y-1 lg:group-hover:translate-y-0">
                    <button onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); setIsShareModalOpen(true); }} className="p-1.5 bg-white/95 backdrop-blur-sm text-emerald-600 rounded-lg shadow-md border border-slate-100 active:scale-90 transition-transform"><Smartphone size={14}/></button>
+                   <button onClick={(e) => { e.stopPropagation(); onShowHistory(product); }} className="p-1.5 bg-white/95 backdrop-blur-sm text-slate-600 rounded-lg shadow-md border border-slate-100 active:scale-90 transition-transform" title="Histórico"><History size={14}/></button>
                    <button onClick={(e) => { e.stopPropagation(); onDuplicate(product); }} className="p-1.5 bg-white/95 backdrop-blur-sm text-indigo-600 rounded-lg shadow-md border border-slate-100 active:scale-90 transition-transform"><Copy size={14}/></button>
                 </div>
               </div>
@@ -213,9 +215,10 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                     </span>
                   </div>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(product.id); }} className="p-2 text-slate-300 hover:text-red-500">
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex flex-col gap-1">
+                   <button onClick={(e) => { e.stopPropagation(); onShowHistory(product); }} className="p-2 text-slate-300 hover:text-indigo-600"><History size={16} /></button>
+                   <button onClick={(e) => { e.stopPropagation(); onDelete(product.id); }} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16} /></button>
+                </div>
               </div>
             ))}
           </div>
@@ -248,7 +251,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                   {filteredAndSortedProducts.map(product => (
                     <tr key={product.id} onClick={() => onEdit(product)} className="hover:bg-slate-50 transition-all cursor-pointer">
                       <td className="px-4 py-3">
-                        {/* Código Maior na Tabela */}
                         <span className="font-mono text-xs font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-md">#{product.id}</span>
                       </td>
                       <td className="px-4 py-3">
@@ -272,6 +274,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                       <td className="px-4 py-3 font-black text-indigo-600 text-xs">R$ {(product.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); onShowHistory(product); }} className="p-1.5 text-slate-400 hover:text-indigo-600" title="Ver Histórico"><History size={14}/></button>
                           <button onClick={(e) => { e.stopPropagation(); onEdit(product); }} className="p-1.5 text-slate-400 hover:text-indigo-600"><Edit2 size={14}/></button>
                           <button onClick={(e) => { e.stopPropagation(); onDelete(product.id); }} className="p-1.5 text-slate-400 hover:text-red-500"><Trash2 size={14}/></button>
                         </div>

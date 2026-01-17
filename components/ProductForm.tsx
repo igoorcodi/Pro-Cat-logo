@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   X, 
   Upload, 
@@ -13,7 +13,9 @@ import {
   ImageOff,
   ChevronDown,
   Check,
-  Layers
+  Layers,
+  History,
+  MessageSquare
 } from 'lucide-react';
 import { Product, Category } from '../types';
 
@@ -21,11 +23,12 @@ interface ProductFormProps {
   initialData?: Product;
   categories: Category[];
   isClone?: boolean;
-  onSave: (product: Partial<Product>) => void;
+  onSave: (product: Partial<Product>, stockNote?: string) => void;
   onCancel: () => void;
+  onShowHistory?: (product: Product) => void;
 }
 
-const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isClone, onSave, onCancel }) => {
+const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isClone, onSave, onCancel, onShowHistory }) => {
   const [formData, setFormData] = useState<Partial<Product>>(initialData || {
     name: '',
     description: '',
@@ -39,8 +42,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     images: []
   });
 
+  const [stockNote, setStockNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isStockModified = useMemo(() => {
+    if (!initialData || isClone) return false;
+    return formData.stock !== initialData.stock;
+  }, [formData.stock, initialData, isClone]);
 
   // Máscara de Moeda
   const formatCurrency = (value: number | string) => {
@@ -71,7 +80,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     const finalData = { ...formData };
     if (isClone) delete finalData.id;
     
-    onSave(finalData);
+    onSave(finalData, stockNote);
     setIsSaving(false);
   };
 
@@ -218,11 +227,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
         </section>
 
         <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-5 sm:mb-6 text-slate-800">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <Package size={18} />
+          <div className="flex items-center justify-between mb-5 sm:mb-6">
+            <div className="flex items-center gap-2 text-slate-800">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <Package size={18} />
+              </div>
+              <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Estoque e Classificação</h3>
             </div>
-            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Estoque e Classificação</h3>
+            
+            {initialData && onShowHistory && (
+              <button 
+                type="button"
+                onClick={() => onShowHistory(initialData)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 transition-all"
+              >
+                <History size={14} /> Ver Histórico
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
@@ -253,6 +274,21 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
               </div>
             </div>
+
+            {isStockModified && (
+              <div className="space-y-2 col-span-1 md:col-span-2 animate-in slide-in-from-top-2 duration-300">
+                <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <MessageSquare size={14} /> Por que você está alterando o estoque?
+                </label>
+                <input 
+                  type="text" 
+                  value={stockNote}
+                  onChange={(e) => setStockNote(e.target.value)}
+                  placeholder="Ex: Recebimento de carga, Ajuste de inventário..."
+                  className="w-full px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl focus:ring-4 focus:ring-amber-100/50 outline-none font-bold text-amber-900"
+                />
+              </div>
+            )}
 
             {selectedCategory && selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
               <div className="space-y-4 animate-in slide-in-from-top-2 duration-300 col-span-1 md:col-span-2">
@@ -292,15 +328,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                             : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-indigo-200'
                         }`}
                       >
-                        {isSelected && <Check size={14} className="stroke-[3]" />}
+                        {isSelected && <Check size={14} className="stroke-[4]" />}
                         {sub.name}
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                  {formData.subcategoryIds?.length || 0} subcategorias selecionadas
-                </p>
               </div>
             )}
           </div>
@@ -347,7 +380,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
               </div>
             )}
           </div>
-          <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Formato JPG/PNG recomendado (Máx. 5 fotos)</p>
         </section>
 
         <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 sm:p-6 bg-white/90 backdrop-blur-md border-t border-slate-100 flex items-center justify-between sm:justify-end gap-3 sm:gap-6 z-40 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">

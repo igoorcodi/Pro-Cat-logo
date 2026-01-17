@@ -16,13 +16,17 @@ import {
   Users,
   CheckCircle2,
   AlertTriangle,
-  Loader2
+  Loader2,
+  ListChecks,
+  History
 } from 'lucide-react';
 import { supabase } from './supabase';
-import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company } from './types';
+import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry } from './types';
 import Dashboard from './components/Dashboard';
 import ProductList from './components/ProductList';
 import ProductForm from './components/ProductForm';
+import StockAdjustment from './components/StockAdjustment';
+import StockHistoryModal from './components/StockHistoryModal';
 import CatalogList from './components/CatalogList';
 import CatalogForm from './components/CatalogForm';
 import CategoryManager from './components/CategoryManager';
@@ -40,6 +44,7 @@ const viewTitles: Record<string, string> = {
   'dashboard': 'Dashboard',
   'products': 'Produtos',
   'product-form': 'Novo Produto',
+  'stock-adjustment': 'Ajuste de Estoque',
   'categories': 'Categorias',
   'catalogs': 'Catálogos',
   'reports': 'Relatórios',
@@ -70,6 +75,7 @@ const App: React.FC = () => {
   
   const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
   const [isCloning, setIsCloning] = useState(false);
+  const [viewingStockHistory, setViewingStockHistory] = useState<Product | null>(null);
   const [editingQuotation, setEditingQuotation] = useState<Quotation | undefined>(undefined);
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
   const [editingCatalog, setEditingCatalog] = useState<Catalog | null | 'new'>(null);
@@ -101,6 +107,7 @@ const App: React.FC = () => {
     delete cleaned.id;
     delete cleaned.createdAt;
     delete cleaned.created_at;
+    delete cleaned.stock_history; 
     Object.keys(cleaned).forEach(key => {
       if (cleaned[key] === '' || cleaned[key] === undefined || cleaned[key] === null) {
         delete cleaned[key];
@@ -112,7 +119,6 @@ const App: React.FC = () => {
   const safeReplaceState = (url: string) => {
     try {
       if (window.history && window.history.replaceState) {
-        // Tenta usar apenas o path se possível, ou o URL completo
         const cleanUrl = url || (window.location.origin + window.location.pathname);
         window.history.replaceState({}, '', cleanUrl);
       }
@@ -219,6 +225,7 @@ const App: React.FC = () => {
             productIds: catalogData.product_ids || [],
             coverImage: catalogData.cover_image,
             logoUrl: catalogData.logo_url,
+            primaryColor: catalogData.primary_color,
             createdAt: catalogData.created_at
           });
           setIsLoadingData(false);
@@ -282,7 +289,14 @@ const App: React.FC = () => {
         try {
           const { data, error } = await supabase.from('catalogs').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
           if (error) throw error;
-          if (data) setCatalogs(data.map(c => ({ ...c, productIds: c.product_ids || [], coverImage: c.cover_image, logoUrl: c.logo_url, createdAt: c.created_at })));
+          if (data) setCatalogs(data.map(c => ({ 
+            ...c, 
+            productIds: c.product_ids || [], 
+            coverImage: c.cover_image, 
+            logoUrl: c.logo_url, 
+            primaryColor: c.primary_color,
+            createdAt: c.created_at 
+          })));
         } catch (e) {}
       };
 
@@ -373,26 +387,113 @@ const App: React.FC = () => {
     if (error) alert(error.message); else { fetchData(); setView('customers'); }
   };
 
-  const handleSaveProduct = async (product: Partial<Product>) => {
+  const handleSaveProduct = async (product: Partial<Product>, stockNote?: string) => {
     if (!user) return;
     const id = product.id;
     const isNew = !id || isCloning;
+    
+    // Buscar produto existente para pegar o histórico atual
+    const existing = isNew ? null : products.find(p => String(p.id) === String(id));
+    const currentHistory = existing?.stock_history || [];
+    const prevStockValue = existing?.stock || 0;
+
+    // Gerar nova entrada de histórico se houver mudança de estoque
+    const historyEntries: StockHistoryEntry[] = [...currentHistory];
+    
+    if (isNew) {
+      // No novo produto, ID é gerado pelo banco. Usamos UUID para o histórico local
+      historyEntries.push({
+        id: crypto.randomUUID(),
+        product_id: 'initial', // Será corrigido no fetch pós-save se necessário
+        previous_stock: 0,
+        new_stock: product.stock || 0,
+        change_amount: product.stock || 0,
+        reason: 'initial_stock',
+        notes: stockNote || 'Cadastro inicial',
+        created_at: new Date().toISOString(),
+        user_name: user.name
+      });
+    } else if (product.stock !== undefined && product.stock !== prevStockValue) {
+      historyEntries.push({
+        id: crypto.randomUUID(),
+        product_id: String(id), // Grava o ID do produto
+        previous_stock: prevStockValue,
+        new_stock: product.stock,
+        change_amount: product.stock - prevStockValue,
+        reason: 'manual_adjustment',
+        notes: stockNote || 'Alterado via formulário',
+        created_at: new Date().toISOString(),
+        user_name: user.name
+      });
+    }
+
     const dataToSave: any = sanitizePayload({
       ...product,
       user_id: user.id,
       category_id: product.categoryId,
-      subcategory_ids: product.subcategoryIds
+      subcategory_ids: product.subcategoryIds,
+      stock_history: historyEntries // Salvando na coluna JSONB
     });
     delete dataToSave.categoryId;
     delete dataToSave.subcategoryId;
     delete dataToSave.subcategoryIds;
     delete dataToSave.category;
 
-    const { error } = isNew 
-      ? await supabase.from('products').insert(dataToSave)
-      : await supabase.from('products').update(dataToSave).eq('id', id);
+    const { data, error } = isNew 
+      ? await supabase.from('products').insert(dataToSave).select()
+      : await supabase.from('products').update(dataToSave).eq('id', id).select();
 
-    if (error) alert(error.message); else { fetchData(); setView('products'); }
+    if (error) {
+      alert(error.message);
+    } else if (isNew && data?.[0]) {
+      // Se era novo, atualizar a entrada do histórico com o ID real gerado pelo banco
+      const realId = data[0].id;
+      const updatedHistory = historyEntries.map(h => h.product_id === 'initial' ? { ...h, product_id: realId } : h);
+      await supabase.from('products').update({ stock_history: updatedHistory }).eq('id', realId);
+      fetchData(); 
+      setView('products');
+    } else {
+      fetchData(); 
+      setView('products');
+    }
+  };
+
+  const handleSaveBatchStock = async (updates: { id: string | number, newStock: number, notes?: string }[]) => {
+    if (!user || !updates.length) return;
+    
+    try {
+      for (const update of updates) {
+        const existing = products.find(p => String(p.id) === String(update.id));
+        if (!existing) continue;
+
+        const prevStockValue = existing.stock || 0;
+        const currentHistory = existing.stock_history || [];
+
+        const newEntry: StockHistoryEntry = {
+          id: crypto.randomUUID(),
+          product_id: String(update.id), // Grava o ID do produto
+          previous_stock: prevStockValue,
+          new_stock: update.newStock,
+          change_amount: update.newStock - prevStockValue,
+          reason: 'manual_adjustment',
+          notes: update.notes || 'Ajuste em massa no painel',
+          created_at: new Date().toISOString(),
+          user_name: user.name
+        };
+
+        await supabase
+          .from('products')
+          .update({ 
+            stock: update.newStock,
+            stock_history: [...currentHistory, newEntry]
+          })
+          .eq('id', update.id);
+      }
+      fetchData();
+      setView('products');
+    } catch (err: any) {
+      alert("Erro ao salvar ajustes: " + err.message);
+    }
   };
 
   const handleSaveCatalog = async (catalog: Partial<Catalog>) => {
@@ -404,10 +505,12 @@ const App: React.FC = () => {
       user_id: user.id,
       cover_image: catalog.coverImage,
       logo_url: catalog.logoUrl,
+      primary_color: catalog.primaryColor,
       product_ids: catalog.productIds
     });
     delete dataToSave.coverImage;
     delete dataToSave.logoUrl;
+    delete dataToSave.primaryColor;
     delete dataToSave.productIds;
 
     const { error } = isNew 
@@ -421,6 +524,13 @@ const App: React.FC = () => {
     if (!user) return;
     const id = quotation.id;
     const isNew = !id;
+    
+    let previousStatus = '';
+    if (!isNew) {
+      const { data: currentQ } = await supabase.from('quotations').select('status').eq('id', id).maybeSingle();
+      previousStatus = currentQ?.status || '';
+    }
+
     const dataToSave: any = sanitizePayload({
       ...quotation,
       user_id: user.id,
@@ -434,16 +544,53 @@ const App: React.FC = () => {
     delete dataToSave.sellerName;
     delete dataToSave.quotationDate;
 
-    const { error } = isNew 
-      ? await supabase.from('quotations').insert(dataToSave)
-      : await supabase.from('quotations').update(dataToSave).eq('id', id);
+    const { data: savedQuotation, error } = isNew 
+      ? await supabase.from('quotations').insert(dataToSave).select()
+      : await supabase.from('quotations').update(dataToSave).eq('id', id).select();
 
     if (error) {
       alert('Erro ao salvar orçamento: ' + error.message);
-    } else { 
-      fetchData(); 
-      setView('quotations'); 
+      return;
     }
+
+    // LÓGICA DE BAIXA DE ESTOQUE + LOGS NA COLUNA JSONB
+    if (quotation.status === 'delivered' && previousStatus !== 'delivered') {
+      try {
+        if (quotation.items && quotation.items.length > 0) {
+          for (const item of quotation.items) {
+            const { data: prod } = await supabase.from('products').select('*').eq('id', item.productId).maybeSingle();
+            if (prod) {
+              const prevStockValue = prod.stock || 0;
+              const newStockValue = Math.max(0, prevStockValue - (item.quantity || 0));
+              const currentHistory = prod.stock_history || [];
+              
+              const newEntry: StockHistoryEntry = {
+                id: crypto.randomUUID(),
+                product_id: String(item.productId), // Grava o ID do produto
+                previous_stock: prevStockValue,
+                new_stock: newStockValue,
+                change_amount: -(item.quantity || 0),
+                reason: 'sale_delivery',
+                reference_id: String(id || savedQuotation?.[0]?.id),
+                notes: `Venda para ${quotation.clientName}`,
+                created_at: new Date().toISOString(),
+                user_name: user.name
+              };
+              
+              await supabase.from('products').update({ 
+                stock: newStockValue,
+                stock_history: [...currentHistory, newEntry]
+              }).eq('id', item.productId);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao processar baixa de estoque:", err);
+      }
+    }
+
+    fetchData(); 
+    setView('quotations'); 
   };
 
   const handleSaveCompany = async (companyData: Partial<Company>) => {
@@ -529,7 +676,7 @@ const App: React.FC = () => {
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={view === 'dashboard'} onClick={() => navigateTo('dashboard')} />
           <NavItem icon={<Users size={20} />} label="Clientes" active={view === 'customers'} onClick={() => navigateTo('customers')} />
-          <NavItem icon={<Package size={20} />} label="Produtos" active={view === 'products'} onClick={() => navigateTo('products')} />
+          <NavItem icon={<Package size={20} />} label="Produtos" active={view === 'products' || view === 'stock-adjustment'} onClick={() => navigateTo('products')} />
           <NavItem icon={<Tags size={20} />} label="Categorias" active={view === 'categories'} onClick={() => navigateTo('categories')} />
           <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />
           <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />
@@ -556,11 +703,22 @@ const App: React.FC = () => {
             <h2 className="text-lg lg:text-xl font-black text-slate-800 tracking-tight">{viewTitles[view]}</h2>
           </div>
           <div className="flex items-center gap-3">
-            {['products', 'customers', 'quotations'].includes(view) && (
+            {['products'].includes(view) && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setView('stock-adjustment')} className="hidden sm:flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
+                  <ListChecks size={18} /> Ajuste de Estoque
+                </button>
+                <button onClick={() => {
+                  setEditingProduct(undefined); setIsCloning(false); setView('product-form');
+                }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
+                  <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
+                </button>
+              </div>
+            )}
+            {['customers', 'quotations'].includes(view) && (
               <button onClick={() => {
                 if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
                 else if (view === 'quotations') { setEditingQuotation(undefined); setView('quotation-form'); }
-                else { setEditingProduct(undefined); setIsCloning(false); setView('product-form'); }
               }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
               </button>
@@ -571,8 +729,26 @@ const App: React.FC = () => {
           {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} quotations={quotations} />}
           {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={(id) => openDeleteConfirmation('customer', id, 'Cliente')} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
-          {view === 'products' && <ProductList products={products} onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} onDelete={(id) => openDeleteConfirmation('product', id, 'Produto')} onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} />}
-          {view === 'product-form' && <ProductForm initialData={editingProduct} categories={categories} isClone={isCloning} onSave={handleSaveProduct} onCancel={() => setView('products')} />}
+          {view === 'products' && (
+            <ProductList 
+              products={products} 
+              onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} 
+              onDelete={(id) => openDeleteConfirmation('product', id, 'Produto')} 
+              onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} 
+              onShowHistory={(p) => setViewingStockHistory(p)}
+            />
+          )}
+          {view === 'product-form' && (
+            <ProductForm 
+              initialData={editingProduct} 
+              categories={categories} 
+              isClone={isCloning} 
+              onSave={handleSaveProduct} 
+              onCancel={() => setView('products')} 
+              onShowHistory={(p) => setViewingStockHistory(p)}
+            />
+          )}
+          {view === 'stock-adjustment' && <StockAdjustment products={products} onSave={handleSaveBatchStock} onCancel={() => setView('products')} />}
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
@@ -580,6 +756,9 @@ const App: React.FC = () => {
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={() => handleLogoutRequest()} onRefresh={fetchData} company={company} onSaveCompany={handleSaveCompany} />}
         </div>
       </main>
+      
+      {viewingStockHistory && <StockHistoryModal product={viewingStockHistory} onClose={() => setViewingStockHistory(null)} />}
+      
       {editingCatalog && <CatalogForm initialData={editingCatalog === 'new' ? undefined : editingCatalog} products={products} onClose={() => setEditingCatalog(null)} onSave={handleSaveCatalog} onDelete={async (id) => { await supabase.from('catalogs').delete().eq('id', id); fetchData(); setEditingCatalog(null); }} />}
       {isSharingCatalog && <ShareCatalogModal catalog={isSharingCatalog} onClose={() => setIsSharingCatalog(null)} />}
       <ConfirmationModal isOpen={deleteModal.isOpen} title={deleteModal.title} message={deleteModal.message} onConfirm={processDeletion} onCancel={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))} isLoading={isDeleting} />

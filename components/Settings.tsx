@@ -92,6 +92,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [isImporting, setIsImporting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   
   const [currentPassword, setCurrentPassword] = useState('');
@@ -267,23 +268,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (newPassword && newPassword !== confirmPassword) {
       alert("As novas senhas não coincidem!");
       return;
     }
 
-    const updatedUser: User = { ...currentUser };
-    if (newPassword) {
-      updatedUser.password = newPassword;
+    setIsSavingProfile(true);
+    try {
+      const updateData: any = { 
+        name: (document.getElementById('profile-name') as HTMLInputElement)?.value || currentUser.name 
+      };
+      
+      if (newPassword) {
+        updateData.password = newPassword;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      onUpdateCurrentUser({ ...currentUser, ...updateData });
+      setProfileSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setProfileSuccess(false), 4000);
+    } catch (err: any) {
+      alert('Erro ao atualizar perfil: ' + err.message);
+    } finally {
+      setIsSavingProfile(false);
     }
-    
-    onUpdateCurrentUser(updatedUser);
-    setProfileSuccess(true);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setTimeout(() => setProfileSuccess(false), 4000);
   };
 
   const handleCompanySubmit = async (e: React.FormEvent) => {
@@ -299,44 +316,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     } finally {
       setIsSavingCompany(false);
     }
-  };
-
-  const handleOpenUserModal = (user?: User) => {
-    if (user) {
-      setEditingUser(user);
-    } else {
-      setEditingUser({
-        id: Math.random().toString(36).substr(2, 9),
-        name: '',
-        email: '',
-        password: '123',
-        role: 'editor',
-        status: 'active',
-        permissions: {
-          dashboard: 'view',
-          products: 'view',
-          categories: 'view',
-          catalogs: 'view',
-          reports: 'none',
-          settings: 'none'
-        }
-      });
-    }
-    setIsUserModalOpen(true);
-  };
-
-  const handleSaveUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-
-    setSystemUsers(prev => {
-      const exists = prev.find(u => u.id === editingUser.id);
-      if (exists) {
-        return prev.map(u => u.id === editingUser.id ? editingUser : u);
-      }
-      return [...prev, editingUser];
-    });
-    setIsUserModalOpen(false);
   };
 
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -400,7 +379,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       if (currentImportType === 'products') {
         const productsToInsert = csvRows.map(row => {
           const categoryName = (row[4] || '').toLowerCase();
-          const subcategoryNames = row[5] ? row[5].split(';').map(s => s.trim().toLowerCase()) : [];
+          // Mudança aqui: Split por vírgula em vez de ponto e vírgula
+          const subcategoryNames = row[5] ? row[5].split(',').map(s => s.trim().toLowerCase()) : [];
           
           const categoryObj = categories.find(c => (c.name || '').toLowerCase() === categoryName);
           
@@ -419,7 +399,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             category_id: categoryObj?.id || null,
             subcategory_ids: subIds,
             description: row[6] || '',
-            tags: row[7] ? row[7].split(';') : [],
+            tags: row[7] ? row[7].split(',') : [],
             status: 'active',
             user_id: currentUser.id,
             images: []
@@ -450,7 +430,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         if (error) throw error;
         setImportStatus({ type: 'success', message: `${customersToInsert.length} clientes importados com sucesso!` });
       } else if (currentImportType === 'categories') {
-        // Lógica para importar categorias e suas subcategorias
         const categoriesToInsert = csvRows.map(row => ({
           name: row[0] || 'Sem Nome',
           user_id: currentUser.id
@@ -465,7 +444,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
         const subcatsToInsert: any[] = [];
         csvRows.forEach((row, index) => {
-          const subNames = row[1] ? row[1].split(';').map(s => s.trim()).filter(Boolean) : [];
+          const subNames = row[1] ? row[1].split(',').map(s => s.trim()).filter(Boolean) : [];
           const parentCat = insertedCats?.find(c => c.name === (row[0] || 'Sem Nome'));
           
           if (parentCat) {
@@ -545,7 +524,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome Completo</label>
-                    <input type="text" defaultValue={currentUser.name} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" />
+                    <input id="profile-name" type="text" defaultValue={currentUser.name} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">E-mail</label>
@@ -571,8 +550,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-10 border-t border-slate-100">
               <div className="flex flex-col gap-2 w-full sm:w-auto">
-                <button onClick={handleSaveProfile} className="w-full sm:w-auto px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
-                  <Check size={20} /> Salvar Alterações
+                <button onClick={handleSaveProfile} disabled={isSavingProfile} className="w-full sm:w-auto px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                  {isSavingProfile ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} Salvar Alterações
                 </button>
                 {profileSuccess && (
                   <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest animate-in fade-in slide-in-from-top-1">
@@ -734,7 +713,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <div className="flex items-center gap-4 justify-end">
                    <button onClick={() => setShowMapping(false)} className="px-8 py-3 text-slate-400 font-black text-sm uppercase">Cancelar</button>
-                   <button onClick={handleFinalImport} disabled={isImporting} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-3">
+                   <button onClick={handleFinalImport} disabled={isImporting} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
                      {isImporting && <Loader2 className="animate-spin" size={20} />} Confirmar Importação
                    </button>
                 </div>

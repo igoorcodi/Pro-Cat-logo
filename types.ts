@@ -5,6 +5,7 @@ export type PermissionLevel = 'none' | 'view' | 'edit' | 'admin';
 export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered';
 export type UserRole = 'admin' | 'editor' | 'viewer';
 export type CustomerStatus = 'active' | 'inactive';
+export type StockChangeReason = 'manual_adjustment' | 'sale_delivery' | 'return' | 'initial_stock';
 
 export interface UserPermissions {
   dashboard: PermissionLevel;
@@ -25,6 +26,19 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   permissions: UserPermissions;
+}
+
+export interface StockHistoryEntry {
+  id: string;
+  product_id: string | number; // ID do produto agora é gravado dentro do log
+  previous_stock: number;
+  new_stock: number;
+  change_amount: number;
+  reason: StockChangeReason;
+  reference_id?: string;
+  notes?: string;
+  created_at: string;
+  user_name?: string;
 }
 
 export interface Company {
@@ -88,13 +102,14 @@ export interface Product {
   category: string; 
   categoryId?: number | string;
   subcategoryId?: number | string;
-  subcategoryIds?: (number | string)[]; // Novo campo para múltiplas subcategorias
+  subcategoryIds?: (number | string)[]; 
   tags: string[];
   createdAt: string;
+  stock_history?: StockHistoryEntry[];
 }
 
 export interface CartItem {
-  id: string; // unique id for cart entry (prodId + subId)
+  id: string; 
   productId: number | string;
   productName: string;
   price: number;
@@ -132,6 +147,7 @@ export interface Catalog {
   description: string;
   coverImage: string;
   logoUrl?: string;
+  primaryColor?: string; 
   productIds: (number | string)[];
   publicUrl?: string;
   user_id?: number | string;
@@ -148,6 +164,7 @@ export type AppView =
   | 'dashboard' 
   | 'products' 
   | 'product-form'
+  | 'stock-adjustment'
   | 'catalogs' 
   | 'categories'
   | 'catalog-detail'
