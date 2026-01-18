@@ -1,3 +1,4 @@
+
 -- Comando para adicionar a coluna de cor personalizada nos catálogos
 ALTER TABLE catalogs 
 ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#4f46e5';
@@ -35,3 +36,10 @@ CREATE POLICY "Users can view their own stock history"
 ON stock_history FOR SELECT 
 TO authenticated 
 USING (true);
+
+-- ADICIONAR COLUNA DE FORMA DE PAGAMENTO EM QUOTATIONS
+-- Utilizando o tipo int8 conforme solicitado
+ALTER TABLE quotations 
+ADD COLUMN IF NOT EXISTS payment_method_id int8 REFERENCES payment_methods(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN quotations.payment_method_id IS 'ID da forma de pagamento associada ao orçamento (int8)';

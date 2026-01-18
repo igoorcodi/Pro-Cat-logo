@@ -21,7 +21,7 @@ import {
   History
 } from 'lucide-react';
 import { supabase } from './supabase';
-import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry } from './types';
+import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry, PaymentMethod } from './types';
 import Dashboard from './components/Dashboard';
 import ProductList from './components/ProductList';
 import ProductForm from './components/ProductForm';
@@ -72,6 +72,7 @@ const App: React.FC = () => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   
   const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
   const [isCloning, setIsCloning] = useState(false);
@@ -139,6 +140,7 @@ const App: React.FC = () => {
     setQuotations([]);
     setCustomers([]);
     setCompany(null);
+    setPaymentMethods([]);
     setSidebarOpen(false);
   }, []);
 
@@ -328,7 +330,15 @@ const App: React.FC = () => {
             .neq('status', 'inactive')
             .order('created_at', { ascending: false });
           if (error) throw error;
-          if (data) setQuotations(data.map(q => ({ ...q, clientName: q.client_name, clientPhone: q.client_phone, sellerName: q.seller_name, quotationDate: q.quotation_date, createdAt: q.created_at })));
+          if (data) setQuotations(data.map(q => ({ 
+            ...q, 
+            clientName: q.client_name, 
+            clientPhone: q.client_phone, 
+            sellerName: q.seller_name, 
+            quotationDate: q.quotation_date, 
+            createdAt: q.created_at,
+            paymentMethodId: q.payment_method_id
+          })));
         } catch (e) {}
       };
 
@@ -353,6 +363,18 @@ const App: React.FC = () => {
         } catch (e) {}
       };
 
+      const fetchPaymentMethods = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('payment_methods')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('status', 'active');
+          if (error) throw error;
+          if (data) setPaymentMethods(data);
+        } catch (e) {}
+      };
+
       const categoriesData = await fetchCategories();
       setCategories(categoriesData);
       
@@ -361,7 +383,8 @@ const App: React.FC = () => {
         fetchCatalogs(),
         fetchQuotations(),
         fetchCustomers(),
-        fetchCompany()
+        fetchCompany(),
+        fetchPaymentMethods()
       ]);
 
     } catch (error) {
@@ -534,6 +557,7 @@ const App: React.FC = () => {
       user_id: user.id,
       cover_image: catalog.coverImage,
       logo_url: catalog.logoUrl,
+      // Usar a propriedade primaryColor do objeto de interface
       primary_color: catalog.primaryColor,
       product_ids: catalog.productIds
     });
@@ -566,12 +590,14 @@ const App: React.FC = () => {
       client_name: quotation.clientName,
       client_phone: quotation.clientPhone,
       seller_name: quotation.sellerName,
-      quotation_date: quotation.quotationDate
+      quotation_date: quotation.quotationDate,
+      payment_method_id: quotation.paymentMethodId
     });
     delete dataToSave.clientName;
     delete dataToSave.clientPhone;
     delete dataToSave.sellerName;
     delete dataToSave.quotationDate;
+    delete dataToSave.paymentMethodId;
 
     const { data: savedQuotation, error } = isNew 
       ? await supabase.from('quotations').insert(dataToSave).select()
@@ -802,7 +828,7 @@ const App: React.FC = () => {
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
-          {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
+          {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} paymentMethods={paymentMethods} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={() => handleLogoutRequest()} onRefresh={fetchData} company={company} onSaveCompany={handleSaveCompany} />}
         </div>
       </main>

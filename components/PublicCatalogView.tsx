@@ -482,7 +482,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         <button 
           onClick={() => setIsCartOpen(true)}
           className="fixed bottom-6 right-6 z-50 p-5 text-white rounded-full shadow-2xl lg:hidden animate-bounce flex items-center justify-center"
-          style={{ backgroundColor: primaryColor, shadowColor: primaryColor + '40' }}
+          // Fixed invalid style property 'shadowColor' by using 'boxShadow'
+          style={{ backgroundColor: primaryColor, boxShadow: `0 25px 50px -12px ${primaryColor}40` }}
         >
           <ShoppingCart size={24} />
           <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-lg">

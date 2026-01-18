@@ -30,7 +30,7 @@ export interface User {
 
 export interface StockHistoryEntry {
   id: string;
-  product_id: string | number; // ID do produto agora é gravado dentro do log
+  product_id: string | number; 
   previous_stock: number;
   new_stock: number;
   change_amount: number;
@@ -59,6 +59,16 @@ export interface Company {
   city?: string;
   state?: string;
   createdAt?: string;
+}
+
+export interface PaymentMethod {
+  id: number | string;
+  user_id: number | string;
+  name: string;
+  fee_percentage: number;
+  fixed_fee: number;
+  status: 'active' | 'inactive';
+  created_at: string;
 }
 
 export interface Customer {
@@ -138,6 +148,7 @@ export interface Quotation {
   status: QuotationStatus;
   notes?: string;
   createdAt: string;
+  paymentMethodId?: number | string;
 }
 
 export interface Catalog {
