@@ -11,11 +11,9 @@ interface CategoryManagerProps {
 }
 
 const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onRefresh }) => {
-  // Fix: ID can be number or string
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
-  // Fix: ID can be number or string
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isBusy, setIsBusy] = useState(false);
@@ -31,34 +29,12 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
   const formatErrorMessage = (error: any): string => {
     if (!error) return 'Erro desconhecido';
     if (typeof error === 'string') return error;
-    const message = error.message || error.msg || error.error_description;
-    const details = error.details || error.hint;
-    const code = error.code;
-
-    if (message) {
-      let fullMsg = `Mensagem: ${message}`;
-      if (code) fullMsg += ` (Código: ${code})`;
-      if (details) fullMsg += `\nDetalhes: ${details}`;
-      if (code === '23503') {
-        fullMsg = "⚠️ ERRO DE VÍNCULO: O usuário da sua sessão não existe mais no banco.\n\nAção necessária: Saia (Logout) e entre novamente.";
-      }
-      return fullMsg;
-    }
-    try {
-      const stringified = JSON.stringify(error, null, 2);
-      return stringified === '{}' ? String(error) : stringified;
-    } catch (e) {
-      return "Erro complexo: " + String(error);
-    }
+    return error.message || JSON.stringify(error);
   };
 
   const addCategory = async () => {
     const name = newCategoryName.trim();
-    if (!name) return;
-    if (!user || !user.id) {
-        alert("Sessão inválida. Por favor, saia e faça login novamente.");
-        return;
-    }
+    if (!name || !user?.id) return;
     
     setIsBusy(true);
     try {
@@ -73,19 +49,25 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
         onRefresh(); 
       }
     } catch (err: any) {
-      alert(`Erro inesperado:\n${err.message || 'Falha na comunicação com o servidor'}`);
+      alert(`Erro inesperado:\n${err.message}`);
     } finally {
       setIsBusy(false);
     }
   };
 
-  // Fix: category ID can be number or string
   const removeCategory = async (id: string | number) => {
     if (!window.confirm('Excluir esta categoria e todas as suas subcategorias?')) return;
+    if (!user?.id) return;
     
     setIsBusy(true);
     try {
-      const { error } = await supabase.from('categories').delete().eq('id', id);
+      // Filtro composto: ID + USER_ID
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
       if (error) {
         alert(`Erro ao excluir categoria:\n${formatErrorMessage(error)}`);
       } else {
@@ -101,8 +83,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
 
   const addSubcategory = async () => {
     const name = newSubcategoryName.trim();
-    if (!name || !selectedCategoryId) return;
-    if (!user || !user.id) return;
+    if (!name || !selectedCategoryId || !user?.id) return;
     
     setIsBusy(true);
     try {
@@ -125,11 +106,16 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
     }
   };
 
-  // Fix: subcategory ID can be number or string
   const removeSubcategory = async (subId: string | number) => {
+    if (!user?.id) return;
     setIsBusy(true);
     try {
-      const { error } = await supabase.from('subcategories').delete().eq('id', subId);
+      const { error } = await supabase
+        .from('subcategories')
+        .delete()
+        .eq('id', subId)
+        .eq('user_id', user.id);
+
       if (error) {
         alert(`Erro ao excluir subcategoria:\n${formatErrorMessage(error)}`);
       } else {
@@ -142,7 +128,6 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
     }
   };
 
-  // Fix: ID can be number or string
   const startEditing = (id: string | number, currentName: string) => {
     setEditingId(id);
     setEditValue(currentName);
@@ -150,7 +135,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
 
   const saveEdit = async (type: 'cat' | 'sub') => {
     const value = editValue.trim();
-    if (editingId === null || !value) {
+    if (editingId === null || !value || !user?.id) {
       setEditingId(null);
       return;
     }
@@ -158,7 +143,12 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
     setIsBusy(true);
     try {
       const table = type === 'cat' ? 'categories' : 'subcategories';
-      const { error } = await supabase.from(table).update({ name: value }).eq('id', editingId);
+      const { error } = await supabase
+        .from(table)
+        .update({ name: value })
+        .eq('id', editingId)
+        .eq('user_id', user.id);
+
       if (error) {
         alert(`Erro ao atualizar:\n${formatErrorMessage(error)}`);
       } else {
@@ -184,7 +174,6 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
       )}
 
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Categories List */}
         <div className="w-full lg:w-1/2 space-y-6">
           <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-6">
@@ -270,7 +259,6 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
           </div>
         </div>
 
-        {/* Subcategories List */}
         <div className="w-full lg:w-1/2 space-y-6">
           <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm h-full flex flex-col">
             <div className="flex items-center justify-between mb-6">
@@ -338,11 +326,6 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, user, onR
                       </div>
                     </div>
                   ))}
-                  {(!selectedCategory.subcategories || selectedCategory.subcategories.length === 0) && (
-                    <div className="py-12 text-center text-slate-300 italic border-2 border-dashed border-slate-50 rounded-2xl text-xs sm:text-sm">
-                      Nenhuma subcategoria em <span className="font-bold">{selectedCategory.name}</span>.
-                    </div>
-                  )}
                 </div>
               </>
             ) : (

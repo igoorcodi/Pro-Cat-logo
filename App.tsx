@@ -107,7 +107,7 @@ const App: React.FC = () => {
   const sanitizePayload = (payload: any, isNew: boolean = true) => {
     const cleaned = { ...payload };
     
-    // IMPORTANTE: Em inserções (isNew), removemos o ID para o Trigger do banco gerar o sequencial
+    // Se for novo cadastro, remover ID para que o Trigger do Banco gere o sequencial por usuário
     if (isNew) {
       delete cleaned.id;
     }
@@ -134,7 +134,7 @@ const App: React.FC = () => {
         window.history.replaceState({}, '', cleanUrl);
       }
     } catch (e) {
-      console.warn('Falha segura: O navegador impediu a atualização da URL via script.', e);
+      console.warn('Falha segura: O navegador impediu a atualização da URL.', e);
     }
   };
 
@@ -296,7 +296,7 @@ const App: React.FC = () => {
 
       const fetchProducts = async (catData: any[]) => {
         try {
-          const { data, error } = await supabase.from('products').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false });
+          const { data, error } = await supabase.from('products').select('*').eq('user_id', user.id).eq('status', 'active').order('id', { ascending: false });
           if (error) throw error;
           if (data) {
             setProducts(data.map(p => ({ 
@@ -317,7 +317,7 @@ const App: React.FC = () => {
             .select('*')
             .eq('user_id', user.id)
             .eq('status', 'active')
-            .order('created_at', { ascending: false });
+            .order('id', { ascending: false });
           if (error) throw error;
           if (data) setCatalogs(data.map(c => ({ 
             ...c, 
@@ -337,7 +337,7 @@ const App: React.FC = () => {
             .select('*')
             .eq('user_id', user.id)
             .neq('status', 'inactive')
-            .order('created_at', { ascending: false });
+            .order('id', { ascending: false });
           if (error) throw error;
           if (data) setQuotations(data.map(q => ({ 
             ...q, 
@@ -353,7 +353,7 @@ const App: React.FC = () => {
 
       const fetchCustomers = async () => {
         try {
-          const { data, error } = await supabase.from('customers').select('*').eq('user_id', user.id).eq('status', 'active').order('created_at', { ascending: false });
+          const { data, error } = await supabase.from('customers').select('*').eq('user_id', user.id).eq('status', 'active').order('id', { ascending: false });
           if (error) throw error;
           if (data) setCustomers(data.map(c => ({ ...c, zipCode: c.zip_code, createdAt: c.created_at })));
         } catch (e) {}
@@ -433,15 +433,15 @@ const App: React.FC = () => {
   const handleSaveCustomer = async (customer: Partial<Customer>) => {
     if (!user) return;
     const id = customer.id;
-    const isNew = !id;
+    const isActuallyNew = !id;
     const dataToSave: any = sanitizePayload({ 
       ...customer, 
       user_id: user.id,
       zip_code: customer.zipCode 
-    }, isNew);
+    }, isActuallyNew);
     delete dataToSave.zipCode;
 
-    const { error } = isNew 
+    const { error } = isActuallyNew 
       ? await supabase.from('customers').insert(dataToSave)
       : await supabase.from('customers').update(dataToSave).eq('id', id).eq('user_id', user.id);
 
@@ -559,7 +559,7 @@ const App: React.FC = () => {
   const handleSaveCatalog = async (catalog: Partial<Catalog>) => {
     if (!user) return;
     const id = catalog.id;
-    const isNew = !id;
+    const isActuallyNew = !id;
     const dataToSave: any = sanitizePayload({
       ...catalog,
       user_id: user.id,
@@ -567,13 +567,13 @@ const App: React.FC = () => {
       logo_url: catalog.logoUrl,
       primary_color: catalog.primaryColor,
       product_ids: catalog.productIds
-    }, isNew);
+    }, isActuallyNew);
     delete dataToSave.coverImage;
     delete dataToSave.logoUrl;
     delete dataToSave.primaryColor;
     delete dataToSave.productIds;
 
-    const { error } = isNew 
+    const { error } = isActuallyNew 
       ? await supabase.from('catalogs').insert(dataToSave)
       : await supabase.from('catalogs').update(dataToSave).eq('id', id).eq('user_id', user.id);
 
@@ -583,10 +583,10 @@ const App: React.FC = () => {
   const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
     if (!user) return;
     const id = quotation.id;
-    const isNew = !id;
+    const isActuallyNew = !id;
     
     let previousStatus = '';
-    if (!isNew) {
+    if (!isActuallyNew) {
       const { data: currentQ } = await supabase.from('quotations').select('status').eq('id', id).eq('user_id', user.id).maybeSingle();
       previousStatus = currentQ?.status || '';
     }
@@ -599,14 +599,14 @@ const App: React.FC = () => {
       seller_name: quotation.sellerName,
       quotation_date: quotation.quotationDate,
       payment_method_id: quotation.paymentMethodId
-    }, isNew);
+    }, isActuallyNew);
     delete dataToSave.clientName;
     delete dataToSave.clientPhone;
     delete dataToSave.sellerName;
     delete dataToSave.quotationDate;
     delete dataToSave.paymentMethodId;
 
-    const { data: savedQuotation, error } = isNew 
+    const { data: savedQuotation, error } = isActuallyNew 
       ? await supabase.from('quotations').insert(dataToSave).select()
       : await supabase.from('quotations').update(dataToSave).eq('id', id).eq('user_id', user.id).select();
 
