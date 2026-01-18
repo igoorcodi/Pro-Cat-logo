@@ -104,17 +104,26 @@ const App: React.FC = () => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const sanitizePayload = (payload: any) => {
+  const sanitizePayload = (payload: any, isNew: boolean = true) => {
     const cleaned = { ...payload };
-    delete cleaned.id;
+    
+    // IMPORTANTE: Em inserções (isNew), removemos o ID para o Trigger do banco gerar o sequencial
+    if (isNew) {
+      delete cleaned.id;
+    }
+    
     delete cleaned.createdAt;
     delete cleaned.created_at;
-    delete cleaned.stock_history; 
+    
     Object.keys(cleaned).forEach(key => {
-      if (cleaned[key] === '' || cleaned[key] === undefined || cleaned[key] === null) {
+      if (cleaned[key] === undefined || cleaned[key] === null) {
+        delete cleaned[key];
+      }
+      if (typeof cleaned[key] === 'string' && cleaned[key].trim() === '') {
         delete cleaned[key];
       }
     });
+    
     return cleaned;
   };
 
@@ -125,7 +134,7 @@ const App: React.FC = () => {
         window.history.replaceState({}, '', cleanUrl);
       }
     } catch (e) {
-      console.warn('Falha segura: O navegador impediu a atualização da URL via script (ambiente restrito/blob).', e);
+      console.warn('Falha segura: O navegador impediu a atualização da URL via script.', e);
     }
   };
 
@@ -429,12 +438,12 @@ const App: React.FC = () => {
       ...customer, 
       user_id: user.id,
       zip_code: customer.zipCode 
-    });
+    }, isNew);
     delete dataToSave.zipCode;
 
     const { error } = isNew 
       ? await supabase.from('customers').insert(dataToSave)
-      : await supabase.from('customers').update(dataToSave).eq('id', id);
+      : await supabase.from('customers').update(dataToSave).eq('id', id).eq('user_id', user.id);
 
     if (error) alert(error.message); else { fetchData(); setView('customers'); }
   };
@@ -442,21 +451,18 @@ const App: React.FC = () => {
   const handleSaveProduct = async (product: Partial<Product>, stockNote?: string) => {
     if (!user) return;
     const id = product.id;
-    const isNew = !id || isCloning;
+    const isActuallyNew = !id || isCloning;
     
-    // Buscar produto existente para pegar o histórico atual
-    const existing = isNew ? null : products.find(p => String(p.id) === String(id));
+    const existing = isActuallyNew ? null : products.find(p => String(p.id) === String(id));
     const currentHistory = existing?.stock_history || [];
     const prevStockValue = existing?.stock || 0;
 
-    // Gerar nova entrada de histórico se houver mudança de estoque
     const historyEntries: StockHistoryEntry[] = [...currentHistory];
     
-    if (isNew) {
-      // No novo produto, ID é gerado pelo banco. Usamos UUID para o histórico local
+    if (isActuallyNew) {
       historyEntries.push({
         id: crypto.randomUUID(),
-        product_id: 'initial', // Será corrigido no fetch pós-save se necessário
+        product_id: 'initial', 
         previous_stock: 0,
         new_stock: product.stock || 0,
         change_amount: product.stock || 0,
@@ -468,7 +474,7 @@ const App: React.FC = () => {
     } else if (product.stock !== undefined && product.stock !== prevStockValue) {
       historyEntries.push({
         id: crypto.randomUUID(),
-        product_id: String(id), // Grava o ID do produto
+        product_id: String(id), 
         previous_stock: prevStockValue,
         new_stock: product.stock,
         change_amount: product.stock - prevStockValue,
@@ -482,26 +488,27 @@ const App: React.FC = () => {
     const dataToSave: any = sanitizePayload({
       ...product,
       user_id: user.id,
-      category_id: product.categoryId,
-      subcategory_ids: product.subcategoryIds,
-      stock_history: historyEntries // Salvando na coluna JSONB
-    });
+      category_id: product.categoryId || null,
+      subcategory_ids: product.subcategoryIds || [],
+      stock_history: historyEntries 
+    }, isActuallyNew);
+    
     delete dataToSave.categoryId;
     delete dataToSave.subcategoryId;
     delete dataToSave.subcategoryIds;
     delete dataToSave.category;
 
-    const { data, error } = isNew 
+    const { data, error } = isActuallyNew 
       ? await supabase.from('products').insert(dataToSave).select()
-      : await supabase.from('products').update(dataToSave).eq('id', id).select();
+      : await supabase.from('products').update(dataToSave).eq('id', id).eq('user_id', user.id).select();
 
     if (error) {
-      alert(error.message);
-    } else if (isNew && data?.[0]) {
-      // Se era novo, atualizar a entrada do histórico com o ID real gerado pelo banco
+      console.error("Erro Supabase:", error);
+      alert("Erro ao salvar produto: " + error.message);
+    } else if (isActuallyNew && data?.[0]) {
       const realId = data[0].id;
       const updatedHistory = historyEntries.map(h => h.product_id === 'initial' ? { ...h, product_id: realId } : h);
-      await supabase.from('products').update({ stock_history: updatedHistory }).eq('id', realId);
+      await supabase.from('products').update({ stock_history: updatedHistory }).eq('id', realId).eq('user_id', user.id);
       fetchData(); 
       setView('products');
     } else {
@@ -523,7 +530,7 @@ const App: React.FC = () => {
 
         const newEntry: StockHistoryEntry = {
           id: crypto.randomUUID(),
-          product_id: String(update.id), // Grava o ID do produto
+          product_id: String(update.id), 
           previous_stock: prevStockValue,
           new_stock: update.newStock,
           change_amount: update.newStock - prevStockValue,
@@ -539,7 +546,8 @@ const App: React.FC = () => {
             stock: update.newStock,
             stock_history: [...currentHistory, newEntry]
           })
-          .eq('id', update.id);
+          .eq('id', update.id)
+          .eq('user_id', user.id);
       }
       fetchData();
       setView('products');
@@ -557,10 +565,9 @@ const App: React.FC = () => {
       user_id: user.id,
       cover_image: catalog.coverImage,
       logo_url: catalog.logoUrl,
-      // Usar a propriedade primaryColor do objeto de interface
       primary_color: catalog.primaryColor,
       product_ids: catalog.productIds
-    });
+    }, isNew);
     delete dataToSave.coverImage;
     delete dataToSave.logoUrl;
     delete dataToSave.primaryColor;
@@ -568,7 +575,7 @@ const App: React.FC = () => {
 
     const { error } = isNew 
       ? await supabase.from('catalogs').insert(dataToSave)
-      : await supabase.from('catalogs').update(dataToSave).eq('id', id);
+      : await supabase.from('catalogs').update(dataToSave).eq('id', id).eq('user_id', user.id);
 
     if (error) alert(error.message); else { fetchData(); setEditingCatalog(null); }
   };
@@ -580,7 +587,7 @@ const App: React.FC = () => {
     
     let previousStatus = '';
     if (!isNew) {
-      const { data: currentQ } = await supabase.from('quotations').select('status').eq('id', id).maybeSingle();
+      const { data: currentQ } = await supabase.from('quotations').select('status').eq('id', id).eq('user_id', user.id).maybeSingle();
       previousStatus = currentQ?.status || '';
     }
 
@@ -592,7 +599,7 @@ const App: React.FC = () => {
       seller_name: quotation.sellerName,
       quotation_date: quotation.quotationDate,
       payment_method_id: quotation.paymentMethodId
-    });
+    }, isNew);
     delete dataToSave.clientName;
     delete dataToSave.clientPhone;
     delete dataToSave.sellerName;
@@ -601,19 +608,18 @@ const App: React.FC = () => {
 
     const { data: savedQuotation, error } = isNew 
       ? await supabase.from('quotations').insert(dataToSave).select()
-      : await supabase.from('quotations').update(dataToSave).eq('id', id).select();
+      : await supabase.from('quotations').update(dataToSave).eq('id', id).eq('user_id', user.id).select();
 
     if (error) {
       alert('Erro ao salvar orçamento: ' + error.message);
       return;
     }
 
-    // LÓGICA DE BAIXA DE ESTOQUE + LOGS NA COLUNA JSONB
     if (quotation.status === 'delivered' && previousStatus !== 'delivered') {
       try {
         if (quotation.items && quotation.items.length > 0) {
           for (const item of quotation.items) {
-            const { data: prod } = await supabase.from('products').select('*').eq('id', item.productId).maybeSingle();
+            const { data: prod } = await supabase.from('products').select('*').eq('id', item.productId).eq('user_id', user.id).maybeSingle();
             if (prod) {
               const prevStockValue = prod.stock || 0;
               const newStockValue = Math.max(0, prevStockValue - (item.quantity || 0));
@@ -621,7 +627,7 @@ const App: React.FC = () => {
               
               const newEntry: StockHistoryEntry = {
                 id: crypto.randomUUID(),
-                product_id: String(item.productId), // Grava o ID do produto
+                product_id: String(item.productId), 
                 previous_stock: prevStockValue,
                 new_stock: newStockValue,
                 change_amount: -(item.quantity || 0),
@@ -635,7 +641,7 @@ const App: React.FC = () => {
               await supabase.from('products').update({ 
                 stock: newStockValue,
                 stock_history: [...currentHistory, newEntry]
-              }).eq('id', item.productId);
+              }).eq('id', item.productId).eq('user_id', user.id);
             }
           }
         }
@@ -650,7 +656,7 @@ const App: React.FC = () => {
 
   const handleSaveCompany = async (companyData: Partial<Company>) => {
     if (!user) return;
-    const dataToSave = sanitizePayload({ ...companyData });
+    const dataToSave = sanitizePayload({ ...companyData }, false);
     
     const { error } = await supabase
       .from('companies')
@@ -678,6 +684,7 @@ const App: React.FC = () => {
   };
 
   const processDeletion = async () => {
+    if (!user) return;
     const { type, id } = deleteModal;
     setIsDeleting(true);
     try {
@@ -689,7 +696,8 @@ const App: React.FC = () => {
         case 'catalog': table = 'catalogs'; break;
       }
 
-      const { error } = await supabase.from(table).delete().eq('id', id);
+      // Agora a deleção exige ID e USER_ID para garantir segurança com a nova PK composta
+      const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id);
 
       if (error) throw error;
       
