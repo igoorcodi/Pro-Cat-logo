@@ -58,6 +58,17 @@ const viewTitles: Record<string, string> = {
   'reset-password': 'Redefinir Senha'
 };
 
+const formatSupabaseError = (error: any): string => {
+  if (!error) return 'Erro desconhecido';
+  if (typeof error === 'string') return error;
+  if (error.message) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch (e) {
+    return String(error);
+  }
+};
+
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('login');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -169,7 +180,6 @@ const App: React.FC = () => {
           setPublicCatalogError(null);
           
           const isNumeric = /^\d+$/.test(publicCatalogId);
-          // Buscamos o catálogo. Se houver mais de um com o mesmo ID numérico, pegamos o primeiro ativo.
           let query = supabase.from('catalogs').select('*').eq('status', 'active');
           
           if (isNumeric) {
@@ -187,7 +197,6 @@ const App: React.FC = () => {
             return;
           }
 
-          // CRITICAL: Filtramos CATEGORIAS pelo user_id do dono do catálogo
           const { data: catData } = await supabase
             .from('categories')
             .select('*, subcategories(*)')
@@ -219,8 +228,6 @@ const App: React.FC = () => {
 
           const productIds = catalogData.product_ids || [];
           if (productIds.length > 0) {
-            // CRITICAL: Filtramos PRODUTOS pelo ID E pelo user_id do dono do catálogo
-            // Isso evita que produtos de outros usuários com o mesmo ID numérico apareçam aqui
             const { data: prodData } = await supabase
               .from('products')
               .select('*')
@@ -446,7 +453,9 @@ const App: React.FC = () => {
       ? await supabase.from('customers').insert(dataToSave)
       : await supabase.from('customers').update(dataToSave).eq('id', id).eq('user_id', user.id);
 
-    if (error) alert(error.message); else { fetchData(); setView('customers'); }
+    if (error) {
+      alert("Erro ao salvar cliente: " + formatSupabaseError(error));
+    } else { fetchData(); setView('customers'); }
   };
 
   const handleSaveProduct = async (product: Partial<Product>, stockNote?: string) => {
@@ -505,7 +514,7 @@ const App: React.FC = () => {
 
     if (error) {
       console.error("Erro Supabase:", error);
-      alert("Erro ao salvar produto: " + error.message);
+      alert("Erro ao salvar produto: " + formatSupabaseError(error));
     } else if (isActuallyNew && data?.[0]) {
       const realId = data[0].id;
       const updatedHistory = historyEntries.map(h => h.product_id === 'initial' ? { ...h, product_id: realId } : h);
@@ -541,7 +550,7 @@ const App: React.FC = () => {
           user_name: user.name
         };
 
-        await supabase
+        const { error } = await supabase
           .from('products')
           .update({ 
             stock: update.newStock,
@@ -549,11 +558,13 @@ const App: React.FC = () => {
           })
           .eq('id', update.id)
           .eq('user_id', user.id);
+        
+        if (error) throw error;
       }
       fetchData();
       setView('products');
     } catch (err: any) {
-      alert("Erro ao salvar ajustes: " + err.message);
+      alert("Erro ao salvar ajustes: " + formatSupabaseError(err));
     }
   };
 
@@ -578,7 +589,9 @@ const App: React.FC = () => {
       ? await supabase.from('catalogs').insert(dataToSave)
       : await supabase.from('catalogs').update(dataToSave).eq('id', id).eq('user_id', user.id);
 
-    if (error) alert(error.message); else { fetchData(); setEditingCatalog(null); }
+    if (error) {
+      alert("Erro ao salvar catálogo: " + formatSupabaseError(error));
+    } else { fetchData(); setEditingCatalog(null); }
   };
 
   const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
@@ -612,7 +625,7 @@ const App: React.FC = () => {
       : await supabase.from('quotations').update(dataToSave).eq('id', id).eq('user_id', user.id).select();
 
     if (error) {
-      alert('Erro ao salvar orçamento: ' + error.message);
+      alert('Erro ao salvar orçamento: ' + formatSupabaseError(error));
       return;
     }
 
@@ -667,7 +680,7 @@ const App: React.FC = () => {
       }, { onConflict: 'user_id' });
       
     if (error) {
-      alert('Erro ao salvar dados da empresa: ' + error.message);
+      alert('Erro ao salvar dados da empresa: ' + formatSupabaseError(error));
     } else {
       fetchData();
     }
@@ -705,7 +718,7 @@ const App: React.FC = () => {
       if (type === 'catalog') setEditingCatalog(null);
       setDeleteModal(prev => ({ ...prev, isOpen: false }));
     } catch (err: any) { 
-      alert(err.message); 
+      alert(formatSupabaseError(err)); 
     } finally { 
       setIsDeleting(false); 
     }

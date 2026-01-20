@@ -1,8 +1,11 @@
 
 -- FUNÇÃO PARA GERAR PRÓXIMO ID BASEADO NO USER_ID
--- Esta função é dinâmica e funciona para qualquer tabela que tenha as colunas 'id' e 'user_id'
+-- Usamos SECURITY DEFINER para garantir que o trigger tenha permissão de leitura mesmo com RLS ativo
 CREATE OR REPLACE FUNCTION get_next_id_by_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
     EXECUTE format('SELECT coalesce(max(id), 0) + 1 FROM %I WHERE user_id = $1', TG_TABLE_NAME)
     INTO NEW.id
@@ -11,65 +14,122 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- APLICAÇÃO EM TODAS AS TABELAS DO SISTEMA
+-- 1. TABELA DE AUDITORIA
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    table_name TEXT NOT NULL,
+    record_id BIGINT,
+    action TEXT NOT NULL,
+    old_data JSONB,
+    new_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (id, user_id)
+);
 
--- 1. PRODUTOS
-ALTER TABLE products ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE products DROP CONSTRAINT IF EXISTS products_pkey CASCADE;
-ALTER TABLE products ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_products ON products;
-CREATE TRIGGER trg_next_id_products BEFORE INSERT ON products FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+-- HABILITAR RLS NA AUDITORIA
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
--- 2. CLIENTES
-ALTER TABLE customers ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_pkey CASCADE;
-ALTER TABLE customers ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_customers ON customers;
-CREATE TRIGGER trg_next_id_customers BEFORE INSERT ON customers FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+-- POLÍTICAS PARA AUDIT_LOGS
+DROP POLICY IF EXISTS "Permitir inserção de logs por gatilhos" ON audit_logs;
+CREATE POLICY "Permitir inserção de logs por gatilhos" 
+ON audit_logs FOR INSERT 
+WITH CHECK (true);
 
--- 3. CATÁLOGOS
-ALTER TABLE catalogs ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE catalogs DROP CONSTRAINT IF EXISTS catalogs_pkey CASCADE;
-ALTER TABLE catalogs ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_catalogs ON catalogs;
-CREATE TRIGGER trg_next_id_catalogs BEFORE INSERT ON catalogs FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+DROP POLICY IF EXISTS "Permitir visualização dos próprios logs" ON audit_logs;
+CREATE POLICY "Permitir visualização dos próprios logs" 
+ON audit_logs FOR SELECT 
+USING (true);
 
--- 4. ORÇAMENTOS
-ALTER TABLE quotations ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE quotations DROP CONSTRAINT IF EXISTS quotations_pkey CASCADE;
-ALTER TABLE quotations ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_quotations ON quotations;
-CREATE TRIGGER trg_next_id_quotations BEFORE INSERT ON quotations FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+DROP TRIGGER IF EXISTS trg_next_id_audit_logs ON audit_logs;
+CREATE TRIGGER trg_next_id_audit_logs BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
 
--- 5. CATEGORIAS
-ALTER TABLE categories ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_pkey CASCADE;
-ALTER TABLE categories ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_categories ON categories;
-CREATE TRIGGER trg_next_id_categories BEFORE INSERT ON categories FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+-- 2. FUNÇÃO DE TRIGGER DE AUDITORIA ATUALIZADA
+-- Usamos SECURITY DEFINER para permitir a escrita na tabela audit_logs independente das permissões do usuário logado
+CREATE OR REPLACE FUNCTION process_audit_log()
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_old_data JSONB := NULL;
+    v_new_data JSONB := NULL;
+    v_user_id BIGINT;
+    v_record_id BIGINT;
+BEGIN
+    IF (TG_OP = 'UPDATE') THEN
+        v_old_data := to_jsonb(OLD);
+        v_new_data := to_jsonb(NEW);
+        v_user_id := NEW.user_id;
+        v_record_id := NEW.id;
+    ELSIF (TG_OP = 'DELETE') THEN
+        v_old_data := to_jsonb(OLD);
+        v_user_id := OLD.user_id;
+        v_record_id := OLD.id;
+    ELSIF (TG_OP = 'INSERT') THEN
+        v_new_data := to_jsonb(NEW);
+        v_user_id := NEW.user_id;
+        v_record_id := NEW.id;
+    END IF;
 
--- 6. SUBCATEGORIAS
-ALTER TABLE subcategories ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE subcategories DROP CONSTRAINT IF EXISTS subcategories_pkey CASCADE;
-ALTER TABLE subcategories ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_subcategories ON subcategories;
-CREATE TRIGGER trg_next_id_subcategories BEFORE INSERT ON subcategories FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+    -- Tenta inserir o log. Com SECURITY DEFINER isso funcionará mesmo que o invoker não tenha permissão direta.
+    INSERT INTO audit_logs (user_id, table_name, record_id, action, old_data, new_data)
+    VALUES (v_user_id, TG_TABLE_NAME, v_record_id, TG_OP, v_old_data, v_new_data);
 
--- 7. FORMAS DE PAGAMENTO
-ALTER TABLE payment_methods ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE payment_methods DROP CONSTRAINT IF EXISTS payment_methods_pkey CASCADE;
-ALTER TABLE payment_methods ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_payment_methods ON payment_methods;
-CREATE TRIGGER trg_next_id_payment_methods BEFORE INSERT ON payment_methods FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+    IF (TG_OP = 'DELETE') THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- 8. EMPRESAS
-ALTER TABLE companies ALTER COLUMN id DROP IDENTITY IF EXISTS;
-ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_pkey CASCADE;
-ALTER TABLE companies ADD PRIMARY KEY (id, user_id);
-DROP TRIGGER IF EXISTS trg_next_id_companies ON companies;
-CREATE TRIGGER trg_next_id_companies BEFORE INSERT ON companies FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+-- 3. REESTRUTURAÇÃO DAS TABELAS PRINCIPAIS (PK COMPOSTA E POLÍTICAS)
+DO $$ 
+DECLARE 
+    t text;
+    tables text[] := ARRAY['products', 'customers', 'catalogs', 'quotations', 'categories', 'subcategories', 'payment_methods', 'companies'];
+BEGIN
+    FOREACH t IN ARRAY tables LOOP
+        -- Ajuste de IDs e PKs
+        EXECUTE format('ALTER TABLE %I ALTER COLUMN id DROP IDENTITY IF EXISTS', t);
+        EXECUTE format('ALTER TABLE %I DROP CONSTRAINT IF EXISTS %I_pkey CASCADE', t, t);
+        EXECUTE format('ALTER TABLE %I ADD PRIMARY KEY (id, user_id)', t);
+        
+        -- Habilitar RLS
+        EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+        
+        -- Adicionar políticas básicas
+        EXECUTE format('DROP POLICY IF EXISTS "Acesso total anon" ON %I', t);
+        EXECUTE format('CREATE POLICY "Acesso total anon" ON %I FOR ALL USING (true) WITH CHECK (true)', t);
 
--- Ajustes de Metadados e Colunas Necessárias
+        -- Triggers de Sequencial por Usuário
+        EXECUTE format('DROP TRIGGER IF EXISTS trg_next_id_%I ON %I', t, t);
+        EXECUTE format('CREATE TRIGGER trg_next_id_%I BEFORE INSERT ON %I FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user()', t, t);
+        
+        -- Trigger de Auditoria
+        EXECUTE format('DROP TRIGGER IF EXISTS trg_audit_%I ON %I', t, t);
+        EXECUTE format('CREATE TRIGGER trg_audit_%I AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION process_audit_log()', t, t);
+    END LOOP;
+END $$;
+
+-- 4. CORREÇÃO DE RELACIONAMENTOS (FK COMPOSTA)
+ALTER TABLE subcategories DROP CONSTRAINT IF EXISTS subcategories_category_id_fkey;
+ALTER TABLE subcategories ADD CONSTRAINT subcategories_category_id_fkey 
+    FOREIGN KEY (category_id, user_id) 
+    REFERENCES categories(id, user_id) 
+    ON DELETE CASCADE;
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_id_fkey;
+ALTER TABLE products ADD CONSTRAINT products_category_id_fkey 
+    FOREIGN KEY (category_id, user_id) 
+    REFERENCES categories(id, user_id) 
+    ON DELETE SET NULL;
+
+-- Garante que o slug seja único globalmente
+ALTER TABLE catalogs DROP CONSTRAINT IF EXISTS catalogs_slug_key;
+ALTER TABLE catalogs ADD CONSTRAINT catalogs_slug_key UNIQUE (slug);
+
+-- Ajustes de Metadados
 ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_history JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#4f46e5';
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS logo_url TEXT;

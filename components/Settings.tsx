@@ -48,9 +48,12 @@ import {
   Percent,
   DollarSign,
   LayoutGrid,
-  List as ListIcon
+  List as ListIcon,
+  ChevronDown,
+  Info,
+  ArrowLeftRight
 } from 'lucide-react';
-import { Product, Category, User, Company, PaymentMethod } from '../types';
+import { Product, Category, User, Company, PaymentMethod, AuditLog } from '../types';
 import { supabase } from '../supabase';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -101,6 +104,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [editingPayment, setEditingPayment] = useState<Partial<PaymentMethod> | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [isFetchingAudit, setIsFetchingAudit] = useState(false);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditTableFilter, setAuditTableFilter] = useState('all');
+  const [viewingLog, setViewingLog] = useState<AuditLog | null>(null);
+
   // Estados para o modal de exclusão de pagamento
   const [isDeletePaymentModalOpen, setIsDeletePaymentModalOpen] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<{id: number | string, name: string} | null>(null);
@@ -116,7 +125,40 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   useEffect(() => {
     if (activeTab === 'payments') fetchPaymentMethods();
+    if (activeTab === 'audit') fetchAuditLogs();
   }, [activeTab]);
+
+  const fetchAuditLogs = async () => {
+    setIsFetchingAudit(true);
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      
+      if (error) throw error;
+      setAuditLogs(data || []);
+    } catch (err) {
+      console.error("Erro ao carregar auditoria:", err);
+    } finally {
+      setIsFetchingAudit(false);
+    }
+  };
+
+  const filteredAuditLogs = useMemo(() => {
+    return auditLogs.filter(log => {
+      const matchesSearch = auditSearch === '' || 
+        log.table_name.toLowerCase().includes(auditSearch.toLowerCase()) ||
+        log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
+        String(log.record_id).includes(auditSearch);
+      
+      const matchesTable = auditTableFilter === 'all' || log.table_name === auditTableFilter;
+      
+      return matchesSearch && matchesTable;
+    });
+  }, [auditLogs, auditSearch, auditTableFilter]);
 
   const fetchPaymentMethods = async () => {
     setIsFetchingPayments(true);
@@ -148,13 +190,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     
     setIsSavingPayment(true);
     try {
-      const userId = typeof currentUser.id === 'string' ? parseInt(currentUser.id) : currentUser.id;
-
       const payload = {
         name: editingPayment.name,
         fee_percentage: parseFloat(String(editingPayment.fee_percentage || 0)),
         fixed_fee: parseFloat(String(editingPayment.fixed_fee || 0)),
-        user_id: userId,
+        user_id: currentUser.id,
         status: 'active'
       };
 
@@ -163,7 +203,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         const { error: insertError } = await supabase.from('payment_methods').insert(payload);
         error = insertError;
       } else {
-        const { error: updateError } = await supabase.from('payment_methods').update(payload).eq('id', editingPayment.id);
+        const { error: updateError } = await supabase.from('payment_methods').update(payload).eq('id', editingPayment.id).eq('user_id', currentUser.id);
         error = updateError;
       }
 
@@ -173,20 +213,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       setIsPaymentModalOpen(false);
       setEditingPayment(null);
     } catch (err: any) {
-      console.error("Erro completo ao salvar pagamento:", err);
       alert("Erro ao salvar: " + (err.message || "Erro desconhecido"));
     } finally {
       setIsSavingPayment(false);
     }
   };
 
-  // Abre o aviso de exclusão
   const handleDeletePaymentClick = (id: number | string, name: string) => {
     setPaymentToDelete({ id, name });
     setIsDeletePaymentModalOpen(true);
   };
 
-  // Executa o "soft delete" (alteração de status) no banco de dados
   const executeDeletePayment = async () => {
     if (!paymentToDelete) return;
     
@@ -195,7 +232,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       const { error } = await supabase
         .from('payment_methods')
         .update({ status: 'inactive' })
-        .eq('id', paymentToDelete.id);
+        .eq('id', paymentToDelete.id)
+        .eq('user_id', currentUser.id);
       
       if (error) throw error;
       
@@ -206,7 +244,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       setIsDeletePaymentModalOpen(false);
       setPaymentToDelete(null);
     } catch (err: any) {
-      console.error("Erro ao desativar forma de pagamento:", err);
       alert("Erro ao desativar: " + (err.message || "Erro inesperado"));
     } finally {
       setIsDeletingPayment(false);
@@ -333,6 +370,66 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'INSERT': return { label: 'CRIADO', color: 'bg-emerald-50 text-emerald-600', icon: <Plus size={12}/> };
+      case 'UPDATE': return { label: 'EDITADO', color: 'bg-indigo-50 text-indigo-600', icon: <Edit2 size={12}/> };
+      case 'DELETE': return { label: 'EXCLUÍDO', color: 'bg-red-50 text-red-600', icon: <Trash2 size={12}/> };
+      default: return { label: action, color: 'bg-slate-100 text-slate-600', icon: <Info size={12}/> };
+    }
+  };
+
+  const getTableNameFriendly = (table: string) => {
+    const map: Record<string, string> = {
+      'products': 'Produto',
+      'customers': 'Cliente',
+      'catalogs': 'Catálogo',
+      'quotations': 'Orçamento',
+      'categories': 'Categoria',
+      'subcategories': 'Subcategoria',
+      'payment_methods': 'Forma Pagto',
+      'companies': 'Empresa'
+    };
+    return map[table] || table;
+  };
+
+  // Função para processar diferenças entre objetos
+  const getAuditDiff = (oldData: any, newData: any) => {
+    const diffs: { field: string; oldVal: any; newVal: any }[] = [];
+    const keys = new Set([...Object.keys(oldData || {}), ...Object.keys(newData || {})]);
+    
+    // Lista de campos internos/ruídos para ignorar na visualização rápida
+    const ignoreFields = ['updated_at', 'created_at', 'user_id', 'id', 'stock_history'];
+
+    keys.forEach(key => {
+      if (ignoreFields.includes(key)) return;
+
+      const v1 = oldData?.[key];
+      const v2 = newData?.[key];
+
+      // Compara valores via stringify para lidar com objetos/arrays
+      if (JSON.stringify(v1) !== JSON.stringify(v2)) {
+        diffs.push({
+          field: key,
+          oldVal: v1,
+          newVal: v2
+        });
+      }
+    });
+
+    return diffs;
+  };
+
+  const formatDiffValue = (val: any) => {
+    if (val === null || val === undefined) return <span className="text-slate-300 italic">Vazio</span>;
+    if (typeof val === 'boolean') return val ? 'Sim' : 'Não';
+    if (Array.isArray(val)) return `Lista (${val.length} itens)`;
+    if (typeof val === 'object') return 'Dados complexos';
+    const str = String(val);
+    if (str.startsWith('data:image')) return 'Imagem (Base64)';
+    return str;
+  };
+
   return (
     <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500 pb-10">
       <aside className="w-full lg:w-72 flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 scrollbar-hide shrink-0 snap-x snap-mandatory">
@@ -342,7 +439,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         <SettingsTab icon={<Wallet size={20} />} label="Pagamentos" active={activeTab === 'payments'} onClick={() => setActiveTab('payments')} />
         <SettingsTab icon={<Users size={20} />} label="Equipe" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
         <SettingsTab icon={<FileUp size={20} />} label="Importar" active={activeTab === 'import'} onClick={() => setActiveTab('import')} />
-        <SettingsTab icon={<History size={20} />} label="Auditoria" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
+        <SettingsTab icon={<Shield size={20} />} label="Auditoria" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
       </aside>
 
       <div className="flex-1 bg-white rounded-t-[2.5rem] lg:rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden min-h-[600px] flex flex-col relative">
@@ -405,6 +502,112 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 )}
               </div>
               <button onClick={onLogout} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 bg-white border border-red-100 hover:bg-red-50 text-red-500 rounded-2xl font-black text-sm transition-all shadow-sm"><LogOut size={20} /> Encerrar Sessão</button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'audit' && (
+          <div className="p-6 lg:p-10 space-y-8 animate-in slide-in-from-right-4 duration-500 flex flex-col h-full">
+            <div>
+              <h4 className="text-3xl font-black text-slate-800 tracking-tight">Auditoria de Dados</h4>
+              <p className="text-slate-500 font-medium">Histórico completo de toda e qualquer alteração realizada no sistema.</p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1 group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  value={auditSearch}
+                  onChange={e => setAuditSearch(e.target.value)}
+                  placeholder="Pesquisar por ação, tabela ou ID..."
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-indigo-50 transition-all"
+                />
+              </div>
+              <div className="relative w-full md:w-56">
+                <select 
+                  value={auditTableFilter}
+                  onChange={e => setAuditTableFilter(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl font-black text-xs uppercase appearance-none outline-none focus:ring-4 focus:ring-indigo-50"
+                >
+                  <option value="all">Todas as tabelas</option>
+                  <option value="products">Produtos</option>
+                  <option value="customers">Clientes</option>
+                  <option value="quotations">Orçamentos</option>
+                  <option value="catalogs">Catálogos</option>
+                  <option value="categories">Categorias</option>
+                  <option value="payment_methods">Formas Pagto</option>
+                  <option value="companies">Empresa</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
+              <button 
+                onClick={fetchAuditLogs}
+                className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl transition-all shadow-sm"
+                title="Recarregar Logs"
+              >
+                <History size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto min-h-[400px] pr-2 custom-scrollbar">
+              {isFetchingAudit ? (
+                <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-4">
+                  <Loader2 className="animate-spin text-indigo-600" size={40} />
+                  <p className="font-black uppercase text-[10px] tracking-widest">Sincronizando registros...</p>
+                </div>
+              ) : filteredAuditLogs.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredAuditLogs.map(log => {
+                    const action = getActionLabel(log.action);
+                    return (
+                      <div 
+                        key={log.id} 
+                        onClick={() => setViewingLog(log)}
+                        className="group bg-white border border-slate-100 rounded-3xl p-5 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all cursor-pointer flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-5 min-w-0">
+                          <div className={`w-12 h-12 rounded-2xl ${action.color} flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform`}>
+                            {action.icon}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{getTableNameFriendly(log.table_name)}</span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-[10px] font-black text-slate-500 bg-slate-50 px-2 py-0.5 rounded uppercase">Cód: #{log.record_id}</span>
+                            </div>
+                            <h5 className="font-bold text-slate-800 text-sm truncate uppercase">
+                              {log.action === 'INSERT' ? `Novo(a) ${getTableNameFriendly(log.table_name)}` : 
+                               log.action === 'UPDATE' ? `Alteração em ${getTableNameFriendly(log.table_name)}` : 
+                               `Remoção de ${getTableNameFriendly(log.table_name)}`}
+                            </h5>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-6 shrink-0">
+                          <div className="text-right hidden sm:block">
+                            <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-0.5">
+                              {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">
+                              {new Date(log.created_at).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                          <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${action.color}`}>
+                            {action.label}
+                          </div>
+                          <ChevronRight className="text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" size={20} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 opacity-40">
+                  <Shield size={64} className="text-slate-300" />
+                  <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Nenhum registro de auditoria encontrado</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -612,11 +815,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
-        {(activeTab === 'users' || activeTab === 'audit') && (
+        {(activeTab === 'users') && (
           <div className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-4 animate-in fade-in zoom-in duration-500">
             <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center shadow-inner"><Clock size={40} /></div>
             <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Em Desenvolvimento</h4>
-            <p className="text-slate-500 font-medium max-w-sm">Estamos trabalhando duro para trazer esta funcionalidade de {activeTab === 'users' ? 'gerenciamento de equipe' : 'auditoria de sistema'} em breve.</p>
+            <p className="text-slate-500 font-medium max-w-sm">Estamos trabalhando duro para trazer esta funcionalidade de gerenciamento de equipe em breve.</p>
           </div>
         )}
 
@@ -631,6 +834,152 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal de Detalhes da Auditoria */}
+      {viewingLog && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+            <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getActionLabel(viewingLog.action).color} shadow-lg`}>
+                  {getActionLabel(viewingLog.action).icon}
+                </div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-sm">Auditoria de Alteração</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{getTableNameFriendly(viewingLog.table_name)} #{viewingLog.record_id}</p>
+                </div>
+              </div>
+              <button onClick={() => setViewingLog(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={24}/></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50/30">
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ação Realizada</p>
+                    <p className="text-xs font-black text-slate-800 uppercase flex items-center gap-2">
+                       {getActionLabel(viewingLog.action).icon}
+                       {viewingLog.action === 'UPDATE' ? 'Atualização de Registro' : viewingLog.action === 'INSERT' ? 'Novo Registro' : 'Remoção de Registro'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Data do Evento</p>
+                    <p className="text-xs font-black text-slate-800 flex items-center gap-2">
+                      <Calendar size={12} className="text-indigo-500" />
+                      {new Date(viewingLog.created_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  {viewingLog.action === 'UPDATE' ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-[11px] font-black text-indigo-600 uppercase tracking-[0.2em] flex items-center gap-2">
+                          <ArrowLeftRight size={14} /> Comparativo de Campos
+                        </p>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded">Exibindo apenas alterações</span>
+                      </div>
+                      
+                      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-5 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest w-1/4">Campo</th>
+                              <th className="px-5 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">De (Anterior)</th>
+                              <th className="px-5 py-3 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Para (Novo)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {getAuditDiff(viewingLog.old_data, viewingLog.new_data).map(diff => (
+                              <tr key={diff.field} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-5 py-4">
+                                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-tight">{diff.field}</span>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <span className="text-xs font-bold text-red-500/70 line-through">
+                                    {formatDiffValue(diff.oldVal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <span className="text-xs font-black text-emerald-600">
+                                    {formatDiffValue(diff.newVal)}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                            {getAuditDiff(viewingLog.old_data, viewingLog.new_data).length === 0 && (
+                              <tr>
+                                <td colSpan={3} className="px-5 py-10 text-center text-slate-400 italic text-xs">
+                                  Nenhuma alteração de valor detectada nos campos visíveis.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="px-1">
+                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] flex items-center gap-2 ${viewingLog.action === 'INSERT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          <FileText size={14} /> Dados do Registro {viewingLog.action === 'INSERT' ? 'Adicionado' : 'Removido'}
+                        </p>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
+                          {Object.entries((viewingLog.action === 'INSERT' ? viewingLog.new_data : viewingLog.old_data) || {}).map(([key, value]) => {
+                            if (['stock_history', 'user_id', 'id'].includes(key)) return null;
+                            return (
+                              <div key={key} className="space-y-1">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{key}</p>
+                                <p className="text-xs font-bold text-slate-700 truncate">{formatDiffValue(value)}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-3 pt-4">
+                    <button 
+                      onClick={(e) => {
+                        const target = e.currentTarget.nextElementSibling as HTMLElement;
+                        target.classList.toggle('hidden');
+                      }}
+                      className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-500 transition-colors flex items-center gap-1"
+                    >
+                      <Plus size={10} /> Ver JSON Bruto (Desenvolvedor)
+                    </button>
+                    <div className="hidden space-y-4 animate-in fade-in slide-in-from-top-2">
+                       {viewingLog.action !== 'INSERT' && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-black text-red-400 uppercase tracking-widest px-1">JSON Anterior</p>
+                          <pre className="p-5 bg-red-50/50 border border-red-100 rounded-3xl text-[10px] font-mono text-red-900 overflow-x-auto whitespace-pre">
+                            {JSON.stringify(viewingLog.old_data, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+
+                      {viewingLog.action !== 'DELETE' && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-1">JSON Novo</p>
+                          <pre className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-3xl text-[10px] font-mono text-emerald-900 overflow-x-auto whitespace-pre">
+                            {JSON.stringify(viewingLog.new_data, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+               </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button onClick={() => setViewingLog(null)} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-slate-100 transition-all">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isPaymentModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300">
