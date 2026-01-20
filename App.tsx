@@ -106,15 +106,11 @@ const App: React.FC = () => {
 
   const sanitizePayload = (payload: any, isNew: boolean = true) => {
     const cleaned = { ...payload };
-    
-    // Se for novo cadastro, remover ID para que o Trigger do Banco gere o sequencial por usuário
     if (isNew) {
       delete cleaned.id;
     }
-    
     delete cleaned.createdAt;
     delete cleaned.created_at;
-    
     Object.keys(cleaned).forEach(key => {
       if (cleaned[key] === undefined || cleaned[key] === null) {
         delete cleaned[key];
@@ -123,7 +119,6 @@ const App: React.FC = () => {
         delete cleaned[key];
       }
     });
-    
     return cleaned;
   };
 
@@ -174,6 +169,7 @@ const App: React.FC = () => {
           setPublicCatalogError(null);
           
           const isNumeric = /^\d+$/.test(publicCatalogId);
+          // Buscamos o catálogo. Se houver mais de um com o mesmo ID numérico, pegamos o primeiro ativo.
           let query = supabase.from('catalogs').select('*').eq('status', 'active');
           
           if (isNumeric) {
@@ -182,7 +178,8 @@ const App: React.FC = () => {
             query = query.eq('slug', publicCatalogId);
           }
 
-          const { data: catalogData, error: catError } = await query.maybeSingle();
+          const { data: catalogDataList, error: catError } = await query;
+          const catalogData = catalogDataList?.[0];
 
           if (catError || !catalogData) {
             setPublicCatalogError("O catálogo solicitado não foi encontrado.");
@@ -190,6 +187,7 @@ const App: React.FC = () => {
             return;
           }
 
+          // CRITICAL: Filtramos CATEGORIAS pelo user_id do dono do catálogo
           const { data: catData } = await supabase
             .from('categories')
             .select('*, subcategories(*)')
@@ -198,7 +196,7 @@ const App: React.FC = () => {
           
           if (catData) setCategories(catData.map(c => ({
             ...c,
-            subcategories: (c.subcategories || []).filter((s: any) => s.status === 'active')
+            subcategories: (c.subcategories || []).filter((s: any) => s.status === 'active' && s.user_id === catalogData.user_id)
           })));
 
           const { data: sellerData } = await supabase
@@ -221,17 +219,20 @@ const App: React.FC = () => {
 
           const productIds = catalogData.product_ids || [];
           if (productIds.length > 0) {
+            // CRITICAL: Filtramos PRODUTOS pelo ID E pelo user_id do dono do catálogo
+            // Isso evita que produtos de outros usuários com o mesmo ID numérico apareçam aqui
             const { data: prodData } = await supabase
               .from('products')
               .select('*')
               .in('id', productIds)
+              .eq('user_id', catalogData.user_id)
               .eq('status', 'active');
             
             if (prodData) {
               setPublicProducts(prodData.map(p => ({ 
                 ...p, 
                 subcategoryIds: p.subcategory_ids || [],
-                category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria',
+                category: catData?.find(c => c.id === p.category_id && c.user_id === catalogData.user_id)?.name || 'Sem Categoria',
                 createdAt: p.created_at 
               })));
             }
@@ -289,7 +290,7 @@ const App: React.FC = () => {
           
           return (data || []).map(cat => ({
             ...cat,
-            subcategories: (cat.subcategories || []).filter((s: any) => s.status === 'active')
+            subcategories: (cat.subcategories || []).filter((s: any) => s.status === 'active' && s.user_id === user.id)
           }));
         } catch (e) { return []; }
       };
@@ -303,7 +304,7 @@ const App: React.FC = () => {
               ...p, 
               categoryId: p.category_id, 
               subcategoryIds: p.subcategory_ids || [],
-              category: catData?.find(c => c.id === p.category_id)?.name || 'Sem Categoria', 
+              category: catData?.find(c => c.id === p.category_id && c.user_id === user.id)?.name || 'Sem Categoria', 
               createdAt: p.created_at 
             })));
           }
@@ -696,7 +697,6 @@ const App: React.FC = () => {
         case 'catalog': table = 'catalogs'; break;
       }
 
-      // Agora a deleção exige ID e USER_ID para garantir segurança com a nova PK composta
       const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id);
 
       if (error) throw error;
