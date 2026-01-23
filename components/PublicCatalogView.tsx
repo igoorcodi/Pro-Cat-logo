@@ -37,7 +37,8 @@ import {
   LogIn,
   LogOut,
   Lock,
-  UserPlus
+  UserPlus,
+  UserCircle
 } from 'lucide-react';
 import { supabase } from '../supabase';
 
@@ -61,21 +62,19 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   
-  // Autenticação do Cliente da Vitrine
+  // Autenticação do Cliente
   const [loggedCustomer, setLoggedCustomer] = useState<Customer | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+  const [authTab, setAuthTab] = useState<'login' | 'register' | 'profile'>('login');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [usedPromotionIds, setUsedPromotionIds] = useState<(string | number)[]>([]);
 
-  // Estados do Formulário de Auth
   const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', password: '' });
-
   const [selectedSubForOrder, setSelectedSubForOrder] = useState<Subcategory | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Estados do Cupom
+  // Cupons
   const [couponInput, setCouponInput] = useState('');
   const [appliedPromotion, setAppliedPromotion] = useState<Promotion | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -83,7 +82,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
   const primaryColor = catalog?.primaryColor || '#4f46e5';
 
-  // Inicializar Sessão do Cliente
   useEffect(() => {
     const saved = localStorage.getItem(`customer_session_${catalog?.id}`);
     if (saved) {
@@ -132,7 +130,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           fetchUsedCoupons(customer.id);
         }
       } else {
-        // Cadastro
         if (authForm.password.length < 6) {
           setAuthError('A senha deve ter no mínimo 6 caracteres.');
           setAuthLoading(false);
@@ -153,8 +150,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
           .select();
 
         if (rError) {
-          if (rError.message.includes('unique')) setAuthError('Este e-mail já está cadastrado.');
-          else setAuthError('Erro ao realizar cadastro. Tente novamente.');
+          if (rError.message.includes('unique')) setAuthError('Este e-mail já está em uso nesta loja.');
+          else setAuthError('Erro ao cadastrar. Tente novamente.');
         } else {
           const customer = data[0];
           setLoggedCustomer(customer);
@@ -174,34 +171,14 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     setLoggedCustomer(null);
     setUsedPromotionIds([]);
     setAppliedPromotion(null);
+    setIsAuthModalOpen(false);
   };
 
-  // Fix: Implement missing copyToClipboard function used in the promotions section.
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedCoupon(text);
     setTimeout(() => setCopiedCoupon(null), 2000);
   };
-
-  const availableCategoryNames = useMemo(() => ['Todos', ...new Set(products.map(p => p.category).filter(Boolean))], [products]);
-
-  const currentSubcategories = useMemo(() => {
-    if (selectedCategoryName === 'Todos') return [];
-    const cat = categories.find(c => c.name === selectedCategoryName);
-    return cat?.subcategories || [];
-  }, [selectedCategoryName, categories]);
-
-  const filteredProducts = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-    return products.filter(p => {
-      const name = p.name || '';
-      const category = p.category || '';
-      const matchesSearch = name.toLowerCase().includes(search);
-      const matchesCategory = selectedCategoryName === 'Todos' || category === selectedCategoryName;
-      const matchesSubcategory = selectedSubcategoryId === 'Todas' || (p.subcategoryIds && p.subcategoryIds.includes(selectedSubcategoryId));
-      return matchesSearch && matchesCategory && matchesSubcategory;
-    });
-  }, [products, searchTerm, selectedCategoryName, selectedSubcategoryId]);
 
   const featuredPromotions = useMemo(() => {
     const now = new Date();
@@ -218,7 +195,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const discountValue = useMemo(() => {
     if (!appliedPromotion) return 0;
     if (appliedPromotion.min_order_value > cartSubtotal) return 0;
-
     let totalDiscount = 0;
     if (appliedPromotion.discount_type === 'fixed') {
       totalDiscount = Math.min(appliedPromotion.discount_value, cartSubtotal);
@@ -236,8 +212,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const handleApplyCoupon = (code?: string) => {
     if (!loggedCustomer) {
       setAuthTab('login');
-      setIsAuthModalOpen(true);
       setAuthError('Você precisa entrar ou se cadastrar para utilizar cupons.');
+      setIsAuthModalOpen(true);
       return;
     }
 
@@ -245,28 +221,13 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     setCouponError(null);
     const promo = promotions.find(p => p.code.toUpperCase() === targetCode.toUpperCase() && p.status === 'active');
 
-    if (!promo) {
-      setCouponError('Cupom inválido ou pausado.');
-      return;
-    }
-
-    if (usedPromotionIds.includes(promo.id)) {
-      setCouponError('Você já utilizou este cupom anteriormente.');
-      return;
-    }
-
-    if (promo.expiry_date && new Date(promo.expiry_date) < new Date()) {
-      setCouponError('Este cupom já expirou.');
-      return;
-    }
-
-    if (promo.usage_limit > 0 && promo.usage_count >= promo.usage_limit) {
-      setCouponError('Este cupom atingiu o limite de utilizações.');
-      return;
-    }
+    if (!promo) { setCouponError('Cupom inválido.'); return; }
+    if (usedPromotionIds.includes(promo.id)) { setCouponError('Você já utilizou este cupom.'); return; }
+    if (promo.expiry_date && new Date(promo.expiry_date) < new Date()) { setCouponError('Cupom expirado.'); return; }
+    if (promo.usage_limit > 0 && promo.usage_count >= promo.usage_limit) { setCouponError('Cupom esgotado.'); return; }
 
     if (promo.min_order_value > cartSubtotal) {
-      setCouponError(`Valor mínimo de R$ ${promo.min_order_value.toLocaleString('pt-BR')}`);
+      setCouponError(`Mínimo de R$ ${promo.min_order_value.toLocaleString('pt-BR')}`);
       if (code) { setAppliedPromotion(promo); setIsCartOpen(true); }
       return;
     }
@@ -280,7 +241,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     const sellerPhone = (company?.whatsapp || seller?.phone || '').replace(/\D/g, '');
     if (!sellerPhone || cart.length === 0) return;
 
-    // Se houver cupom, registramos o uso no banco para o cliente não usar de novo
     if (appliedPromotion && loggedCustomer && catalog?.user_id) {
        await supabase.from('customer_coupon_usage').insert({
           customer_id: loggedCustomer.id,
@@ -307,7 +267,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       message += `*Desconto: -R$ ${discountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
     }
     message += `*TOTAL DO PEDIDO: R$ ${cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
-    message += `Aguardando sua confirmação! 😊`;
 
     const encoded = encodeURIComponent(message);
     window.open(`https://wa.me/${sellerPhone}?text=${encoded}`, '_blank');
@@ -317,9 +276,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     const cartId = `${product.id}_${sub?.id || 'none'}`;
     setCart(prev => {
       const existing = prev.find(item => item.id === cartId);
-      if (existing) {
-        return prev.map(item => item.id === cartId ? { ...item, quantity: item.quantity + 1 } : item);
-      }
+      if (existing) return prev.map(item => item.id === cartId ? { ...item, quantity: item.quantity + 1 } : item);
       return [...prev, { id: cartId, productId: product.id, productName: product.name, price: product.price, quantity: 1, image: product.images?.[0], selectedSub: sub }];
     });
     setViewingProduct(null);
@@ -330,14 +287,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
   };
 
-  const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(item => item.id !== id));
-  };
+  const removeFromCart = (id: string) => { setCart(prev => prev.filter(item => item.id !== id)); };
 
-  const handleCategoryChange = (cat: string) => {
-    setSelectedCategoryName(cat);
-    setSelectedSubcategoryId('Todas');
-  };
+  const handleCategoryChange = (cat: string) => { setSelectedCategoryName(cat); setSelectedSubcategoryId('Todas'); };
 
   const displayLogoUrl = catalog?.logoUrl || company?.logo_url;
 
@@ -376,14 +328,17 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-full text-xs focus:ring-2 outline-none" style={{ '--tw-ring-color': primaryColor + '40' } as React.CSSProperties} />
             </div>
 
-            {/* User Profile / Login */}
+            {/* Login / Perfil do Cliente */}
             {loggedCustomer ? (
-               <div className="flex items-center gap-2 bg-slate-100 pl-3 pr-1 py-1 rounded-full border border-slate-200">
-                  <span className="text-[10px] font-black text-slate-700 uppercase truncate max-w-[80px]">{loggedCustomer.name.split(' ')[0]}</span>
-                  <button onClick={handleLogout} className="p-1.5 bg-white text-slate-400 hover:text-red-500 rounded-full shadow-sm transition-all"><LogOut size={14}/></button>
-               </div>
+               <button 
+                onClick={() => { setAuthTab('profile'); setIsAuthModalOpen(true); }}
+                className="flex items-center gap-2 bg-slate-100 pl-3 pr-1 py-1 rounded-full border border-slate-200 hover:bg-slate-200 transition-all"
+               >
+                  <span className="text-[10px] font-black text-slate-700 uppercase truncate max-w-[80px]">Olá, {loggedCustomer.name.split(' ')[0]}</span>
+                  <div className="w-8 h-8 bg-white text-indigo-600 rounded-full flex items-center justify-center shadow-sm"><UserCircle size={18}/></div>
+               </button>
             ) : (
-              <button onClick={() => setIsAuthModalOpen(true)} className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-90 flex items-center gap-2">
+              <button onClick={() => { setAuthTab('login'); setIsAuthModalOpen(true); }} className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-90 flex items-center gap-2">
                 <LogIn size={18} />
                 <span className="text-[10px] font-black uppercase tracking-widest hidden xs:block">Entrar</span>
               </button>
@@ -413,7 +368,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       </div>
 
-      {/* Destaque de Cupons na Home */}
+      {/* Destaque de Cupons */}
       {!searchTerm && featuredPromotions.length > 0 && (
         <div className="shrink-0 bg-white border-b border-slate-100 py-6 overflow-hidden">
           <div className="max-w-7xl mx-auto px-4">
@@ -442,11 +397,13 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                             {isUsed ? <Check size={20} /> : <Ticket size={20} />}
                           </div>
                         </div>
-                        
                         <div className="mt-4 space-y-1">
                           <p className="text-[11px] font-bold text-indigo-100 flex items-center gap-1.5">
                              <CheckCircle2 size={12} className={isUsed ? 'text-white' : 'text-emerald-400'} />
                              Válido acima de R$ {promo.min_order_value}
+                          </p>
+                          <p className="text-[9px] font-medium text-indigo-200/80 italic flex items-center gap-1">
+                             <Info size={10} /> O uso será validado ao enviar o pedido pelo WhatsApp.
                           </p>
                         </div>
                     </div>
@@ -476,39 +433,25 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       )}
 
-      {/* Grid de Produtos e demais seções (resumido para foco na mudança) */}
-      <div className="shrink-0 bg-white border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 py-4 overflow-x-auto no-scrollbar flex items-center gap-2">
-          {availableCategoryNames.map(cat => (
-            <button key={cat} onClick={() => handleCategoryChange(cat)} className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest shrink-0 transition-all ${selectedCategoryName === cat ? 'text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`} style={selectedCategoryName === cat ? { backgroundColor: primaryColor } : {}}>{cat}</button>
-          ))}
-        </div>
-      </div>
-
+      {/* Grid de Produtos */}
       <main className="flex-1 max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-8 my-8 mb-24 lg:mb-16">
         {isLoading ? (
           <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin" style={{ color: primaryColor }} size={32} /></div>
-        ) : filteredProducts.length > 0 ? (
-          filteredProducts.map(product => (
-            <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-slate-100 flex flex-col cursor-pointer h-full">
+        ) : products.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase())).length > 0 ? (
+          products.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(product => (
+            <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all border border-slate-100 flex flex-col cursor-pointer h-full">
               <div className="aspect-square bg-slate-50 overflow-hidden relative shrink-0">
-                {product.images && product.images.length > 0 ? (
-                  <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={product.name} />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2 p-4"><ImageOff size={32} strokeWidth={1} /><span className="text-xs font-black uppercase tracking-tighter text-center">Sem foto</span></div>
-                )}
-                <div className="absolute top-3 left-3 sm:top-4 sm:left-4"><span className="bg-slate-900/80 backdrop-blur-md text-white text-[9px] sm:text-[11px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg shadow-lg border border-white/10">#{String(product.id).substring(0, 6)}</span></div>
-                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); addToCart(product); }} className="p-2 sm:p-3 bg-white rounded-xl sm:rounded-2xl shadow-xl shadow-black/5 hover:brightness-110 transition-all active:scale-90" style={{ color: primaryColor }}><Plus size={18} sm:size={20} strokeWidth={3} /></button>
+                {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageOff size={32} /></div>}
+                <div className="absolute top-3 right-3 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); addToCart(product); }} className="p-2 bg-white rounded-xl shadow-lg" style={{ color: primaryColor }}><Plus size={18} /></button>
                 </div>
               </div>
-              <div className="p-4 sm:p-6 lg:p-7 flex flex-col flex-1 justify-between">
+              <div className="p-4 flex flex-col flex-1 justify-between">
                 <div>
-                  <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest line-clamp-1 opacity-60" style={{ color: primaryColor }}>{product.category || 'Geral'}</span>
-                  <h3 className="font-bold text-slate-800 text-sm sm:text-lg leading-tight line-clamp-2 mb-2 sm:mb-3 mt-1">{product.name || 'Sem nome'}</h3>
-                  <p className="font-black text-base sm:text-xl" style={{ color: primaryColor }}>R$ {(product.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <span className="text-[8px] font-black uppercase text-slate-400">{product.category || 'Geral'}</span>
+                  <h3 className="font-bold text-slate-800 text-sm leading-tight line-clamp-2 mt-1">{product.name}</h3>
+                  <p className="font-black text-base mt-2" style={{ color: primaryColor }}>R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
-                <button className="mt-4 sm:mt-6 w-full py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-transparent text-white" style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>Ver Detalhes <ArrowRight size={12} sm:size={14}/></button>
               </div>
             </div>
           ))
@@ -517,62 +460,119 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         )}
       </main>
 
-      {/* Auth Modal (Login/Cadastro) */}
+      {/* Auth & Perfil Modal */}
       {isAuthModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
-               <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg"><UserIcon size={20} /></div>
-                 <div>
-                   <h3 className="font-black uppercase tracking-tight text-sm">{authTab === 'login' ? 'Entrar na Vitrine' : 'Criar minha conta'}</h3>
-                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Portal do Cliente</p>
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            {authTab === 'profile' && loggedCustomer ? (
+              <div className="flex flex-col h-full max-h-[85vh]">
+                 <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg"><UserCircle size={28} /></div>
+                      <div>
+                        <h3 className="font-black text-sm uppercase">Sua Conta</h3>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Portal do Cliente</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setIsAuthModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={24}/></button>
                  </div>
-               </div>
-               <button onClick={() => setIsAuthModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={24}/></button>
-            </div>
-
-            <div className="p-8 space-y-6">
-               <div className="flex bg-slate-100 p-1 rounded-2xl">
-                 <button onClick={() => setAuthTab('login')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authTab === 'login' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Login</button>
-                 <button onClick={() => setAuthTab('register')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authTab === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Cadastro</button>
-               </div>
-
-               {authError && <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300"><AlertCircle size={20} /><span className="text-xs font-bold">{authError}</span></div>}
-
-               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  {authTab === 'register' && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome Completo</label>
-                      <div className="relative"><UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required type="text" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" placeholder="Ex: João Silva" /></div>
+                 <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                    <div className="space-y-1">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Completo</p>
+                       <p className="font-bold text-slate-800">{loggedCustomer.name}</p>
                     </div>
-                  )}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">E-mail</label>
-                    <div className="relative"><Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required type="email" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" placeholder="seu@email.com" /></div>
-                  </div>
-                  {authTab === 'register' && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">WhatsApp</label>
-                      <div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required type="tel" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" placeholder="(11) 99999-9999" /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">E-mail</p>
+                          <p className="text-xs font-bold text-slate-600 truncate">{loggedCustomer.email}</p>
+                       </div>
+                       <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp</p>
+                          <p className="text-xs font-bold text-slate-600">{loggedCustomer.phone}</p>
+                       </div>
                     </div>
-                  )}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Senha (Mín. 6 chars)</label>
-                    <div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required minLength={6} type="password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" placeholder="••••••••" /></div>
+
+                    <div className="pt-6 border-t border-slate-100 space-y-4">
+                       <div className="flex items-center gap-2 text-indigo-600">
+                         <Ticket size={16} />
+                         <h4 className="text-[10px] font-black uppercase tracking-widest">Cupons Utilizados ({usedPromotionIds.length})</h4>
+                       </div>
+                       
+                       <div className="space-y-2">
+                          {usedPromotionIds.length > 0 ? (
+                            promotions.filter(p => usedPromotionIds.includes(p.id)).map(promo => (
+                              <div key={promo.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                                 <span className="font-black text-[10px] text-slate-600 uppercase tracking-widest">{promo.code}</span>
+                                 <span className="text-[9px] font-bold text-emerald-600 uppercase">Utilizado ✅</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-center py-6 text-xs text-slate-400 font-medium italic">Nenhum cupom utilizado ainda.</p>
+                          )}
+                       </div>
+                    </div>
+
+                    <button onClick={handleLogout} className="w-full py-4 mt-4 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2 hover:bg-red-500 hover:text-white">
+                      <LogOut size={16}/> Sair da Conta
+                    </button>
+                 </div>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg"><UserIcon size={20} /></div>
+                    <div>
+                      <h3 className="font-black uppercase tracking-tight text-sm">{authTab === 'login' ? 'Entrar na Vitrine' : 'Criar minha conta'}</h3>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Acesso Exclusivo</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsAuthModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={24}/></button>
+                </div>
+
+                <div className="p-8 space-y-6">
+                  <div className="flex bg-slate-100 p-1 rounded-2xl">
+                    <button onClick={() => setAuthTab('login')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authTab === 'login' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Login</button>
+                    <button onClick={() => setAuthTab('register')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authTab === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Cadastro</button>
                   </div>
 
-                  <button type="submit" disabled={authLoading} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-3 active:scale-95">
-                    {authLoading ? <Loader2 className="animate-spin" size={20} /> : (authTab === 'login' ? <LogIn size={20}/> : <UserPlus size={20}/>)}
-                    {authTab === 'login' ? 'Entrar agora' : 'Confirmar Cadastro'}
-                  </button>
-               </form>
-            </div>
+                  {authError && <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 text-red-600 animate-in shake"><AlertCircle size={18} className="shrink-0 mt-0.5" /><span className="text-xs font-bold leading-tight">{authError}</span></div>}
+
+                  <form onSubmit={handleAuthSubmit} className="space-y-4">
+                    {authTab === 'register' && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome Completo</label>
+                        <div className="relative"><UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required type="text" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2" placeholder="Ex: João Silva" /></div>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">E-mail</label>
+                      <div className="relative"><Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required type="email" value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2" placeholder="seu@email.com" /></div>
+                    </div>
+                    {authTab === 'register' && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">WhatsApp</label>
+                        <div className="relative"><Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required type="tel" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2" placeholder="(11) 99999-9999" /></div>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Senha (Mín. 6 chars)</label>
+                      <div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required minLength={6} type="password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2" placeholder="••••••••" /></div>
+                    </div>
+
+                    <button type="submit" disabled={authLoading} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50">
+                      {authLoading ? <Loader2 className="animate-spin" size={20} /> : (authTab === 'login' ? <LogIn size={20}/> : <UserPlus size={20}/>)}
+                      {authTab === 'login' ? 'Entrar agora' : 'Confirmar Cadastro'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Cart Drawer */}
+      {/* Carrinho */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)} />
@@ -585,18 +585,15 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {cart.length > 0 ? (
                 <>
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {cart.map(item => (
-                      <div key={item.id} className="flex gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 group animate-in slide-in-from-bottom-2">
-                        <div className="w-20 h-20 bg-white rounded-2xl overflow-hidden border border-slate-100 shrink-0">{item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-200"><ImageOff size={24}/></div>}</div>
+                      <div key={item.id} className="flex gap-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 group">
+                        <div className="w-16 h-16 bg-white rounded-xl overflow-hidden border shrink-0">{item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-200"><ImageOff size={20}/></div>}</div>
                         <div className="flex-1 min-w-0 flex flex-col justify-between">
-                          <div>
-                            <h4 className="font-bold text-slate-800 text-sm truncate">{item.productName}</h4>
-                            <p className="text-xs font-black text-slate-400 mt-1">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <div className="flex items-center justify-between mt-3">
-                            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-2 py-1"><button onClick={() => updateCartQuantity(item.id, -1)} className="p-1 text-slate-400 hover:brightness-75" style={{ color: primaryColor }}><Minus size={14}/></button><span className="text-xs font-black w-4 text-center">{item.quantity}</span><button onClick={() => updateCartQuantity(item.id, 1)} className="p-1 text-slate-400 hover:brightness-75" style={{ color: primaryColor }}><Plus size={14}/></button></div>
-                            <button onClick={() => removeFromCart(item.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
+                          <h4 className="font-bold text-slate-800 text-xs truncate">{item.productName}</h4>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-black text-indigo-600">R$ {item.price.toLocaleString('pt-BR')}</p>
+                            <div className="flex items-center gap-2 bg-white border rounded-lg px-1 py-0.5"><button onClick={() => updateCartQuantity(item.id, -1)} className="p-1"><Minus size={10}/></button><span className="text-xs font-black w-4 text-center">{item.quantity}</span><button onClick={() => updateCartQuantity(item.id, 1)} className="p-1"><Plus size={10}/></button></div>
                           </div>
                         </div>
                       </div>
@@ -604,26 +601,39 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   </div>
 
                   <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
-                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                      <Ticket size={14} className="text-indigo-500" /> Cupom de Desconto
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <Ticket size={14} className="text-indigo-500" /> Cupom de Desconto
+                      </div>
+                      {!loggedCustomer && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Login Obrigatório</span>}
                     </div>
                     {appliedPromotion ? (
-                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 p-3 rounded-2xl animate-in zoom-in">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center"><Check size={18} /></div>
-                          <div><p className="text-xs font-black text-emerald-700 uppercase">{appliedPromotion.code}</p><p className="text-[9px] font-bold text-emerald-600">Desconto aplicado com sucesso!</p></div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 p-3 rounded-2xl animate-in zoom-in">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center"><Check size={18} /></div>
+                            <div><p className="text-xs font-black text-emerald-700 uppercase">{appliedPromotion.code}</p><p className="text-[9px] font-bold text-emerald-600">Cupom aplicado com sucesso!</p></div>
+                          </div>
+                          <button onClick={() => setAppliedPromotion(null)} className="p-1.5 text-emerald-400 hover:text-red-500"><X size={18}/></button>
                         </div>
-                        <button onClick={() => setAppliedPromotion(null)} className="p-1.5 text-emerald-400 hover:text-red-500"><X size={18}/></button>
+                        <p className="text-[9px] font-medium text-slate-400 italic flex items-center gap-1 px-1">
+                           <Info size={10} /> O cupom será registrado ao enviar o pedido pelo WhatsApp.
+                        </p>
                       </div>
                     ) : (
-                      <div className="flex gap-2">
-                        <input type="text" placeholder={loggedCustomer ? "Digite o cupom..." : "Faça login para usar cupons"} disabled={!loggedCustomer} value={couponInput} onChange={e => setCouponInput(e.target.value.toUpperCase())} className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase outline-none focus:ring-2 disabled:opacity-50" style={{ '--tw-ring-color': primaryColor + '30' } as any} />
-                        <button onClick={() => loggedCustomer ? handleApplyCoupon() : setIsAuthModalOpen(true)} className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
-                          {loggedCustomer ? 'Aplicar' : 'Entrar'}
-                        </button>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <input type="text" placeholder={loggedCustomer ? "Digite o cupom..." : "Faça login para usar"} disabled={!loggedCustomer} value={couponInput} onChange={e => setCouponInput(e.target.value.toUpperCase())} className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase outline-none focus:ring-2 disabled:opacity-50" />
+                          <button onClick={() => loggedCustomer ? handleApplyCoupon() : setIsAuthModalOpen(true)} className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
+                            {loggedCustomer ? 'Aplicar' : 'Entrar'}
+                          </button>
+                        </div>
+                        <p className="text-[9px] font-medium text-slate-400 italic flex items-center gap-1 px-1">
+                           <Info size={10} /> Descontos são validados na etapa final (WhatsApp).
+                        </p>
                       </div>
                     )}
-                    {couponError && <p className="text-[9px] font-bold text-red-500 flex items-center gap-1 px-1 animate-in shake duration-300"><AlertCircle size={10}/> {couponError}</p>}
+                    {couponError && <p className="text-[9px] font-bold text-red-500 flex items-center gap-1 px-1 animate-in shake"><AlertCircle size={10}/> {couponError}</p>}
                   </div>
                 </>
               ) : (
@@ -632,7 +642,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             </div>
 
             {cart.length > 0 && (
-              <div className="p-6 bg-slate-900 text-white space-y-6">
+              <div className="p-6 bg-slate-900 text-white space-y-6 shrink-0">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-slate-400"><span className="text-[10px] font-black uppercase tracking-widest">Subtotal</span><span className="text-sm font-bold">R$ {cartSubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                   {appliedPromotion && <div className="flex items-center justify-between text-emerald-400"><span className="text-[10px] font-black uppercase tracking-widest">Desconto</span><span className="text-sm font-bold">- R$ {discountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>}
@@ -645,7 +655,23 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       )}
 
-      {/* Restante do componente permanece o mesmo... */}
+      {/* Visualização de Produto Individual */}
+      {viewingProduct && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 flex flex-col sm:flex-row max-h-[90vh]">
+            <div className="w-full sm:w-1/2 bg-slate-100 relative h-64 sm:h-auto shrink-0">
+              {viewingProduct.images?.[0] ? <img src={viewingProduct.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageOff size={48}/></div>}
+              <button onClick={() => setViewingProduct(null)} className="absolute top-4 right-4 p-2 bg-slate-900/40 backdrop-blur-md text-white rounded-full sm:hidden transition-transform active:scale-90"><X size={24} /></button>
+            </div>
+            <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto">
+              <div className="hidden sm:flex justify-end mb-4"><button onClick={() => setViewingProduct(null)} className="p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-slate-200 transition-all"><X size={20} /></button></div>
+              <div className="mb-6"><span className="text-[10px] font-black uppercase tracking-widest" style={{ color: primaryColor }}>{viewingProduct.category || 'Geral'}</span><h2 className="text-xl sm:text-2xl font-black text-slate-800 leading-tight mt-1">{viewingProduct.name}</h2></div>
+              <div className="flex-1 space-y-6"><div><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Sobre este item</h4><p className="text-slate-600 text-sm leading-relaxed">{viewingProduct.description || 'Sem descrição.'}</p></div></div>
+              <div className="mt-auto pt-6 border-t border-slate-100 flex flex-col gap-4"><div className="flex items-baseline justify-between"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Preço Unitário</p><span className="text-2xl sm:text-3xl font-black text-slate-900">R$ {viewingProduct.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div><button onClick={() => addToCart(viewingProduct, null)} className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 text-white hover:brightness-110" style={{ backgroundColor: primaryColor }}><Plus size={20}/> Adicionar ao Carrinho</button></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

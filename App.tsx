@@ -366,7 +366,7 @@ const App: React.FC = () => {
             clientName: q.client_name, 
             clientPhone: q.client_phone, 
             sellerName: q.seller_name, 
-            quotationDate: q.quotation_date, 
+            quotation_date: q.quotation_date, 
             createdAt: q.created_at,
             paymentMethodId: q.payment_method_id
           })));
@@ -752,7 +752,10 @@ const App: React.FC = () => {
         case 'promotion': table = 'promotions'; break;
       }
 
-      const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id);
+      // Se for promoção, apenas desativa o status (Soft Delete)
+      const { error } = type === 'promotion'
+        ? await supabase.from(table).update({ status: 'inactive' }).eq('id', id).eq('user_id', user.id)
+        : await supabase.from(table).delete().eq('id', id).eq('user_id', user.id);
 
       if (error) throw error;
       
@@ -785,10 +788,10 @@ const App: React.FC = () => {
         error={publicCatalogError}
         categories={categories}
         promotions={promotions}
-        onBack={() => {
-          if (user) setView('catalogs'); else setView('login');
+        onBack={user ? () => {
+          setView('catalogs');
           safeReplaceState('');
-        }} 
+        } : undefined} 
       />
     );
   }
@@ -856,11 +859,10 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
-            {['customers', 'quotations', 'promotions'].includes(view) && (
+            {['customers', 'quotations'].includes(view) && (
               <button onClick={() => {
                 if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
                 else if (view === 'quotations') { setEditingQuotation(undefined); setView('quotation-form'); }
-                else if (view === 'promotions') { /* Handled inside manager */ }
               }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
               </button>
