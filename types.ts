@@ -90,6 +90,7 @@ export interface Product {
   categoryId?: string | number;
   subcategory_ids?: (string | number)[];
   subcategoryIds?: (string | number)[];
+  subcategory_stock?: Record<string, number>;
   tags?: string[];
   images?: string[];
   category: string;

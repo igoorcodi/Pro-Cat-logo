@@ -155,7 +155,15 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
                         </div>
                         <div className="flex items-center gap-2">
                           <h4 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight uppercase truncate">{promo.code}</h4>
-                          {promo.show_on_home && <Eye size={14} className="text-indigo-500" title="Exibindo na vitrine" />}
+                          {/* 
+                            Fix: Wrapped Eye icon in a span with 'title' attribute because Lucide icons 
+                            do not support the 'title' prop directly.
+                          */}
+                          {promo.show_on_home && (
+                            <span title="Exibindo na vitrine">
+                              <Eye size={14} className="text-indigo-500" />
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2 mt-1">
                           <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${promo.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>

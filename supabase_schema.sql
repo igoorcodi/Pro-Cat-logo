@@ -131,6 +131,7 @@ ALTER TABLE catalogs ADD CONSTRAINT catalogs_slug_key UNIQUE (slug);
 
 -- Ajustes de Metadados
 ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_history JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_stock JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#4f46e5';
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS logo_url TEXT;
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS cover_image TEXT;

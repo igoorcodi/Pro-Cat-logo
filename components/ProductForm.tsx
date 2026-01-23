@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   X, 
@@ -16,7 +17,7 @@ import {
   History,
   MessageSquare
 } from 'lucide-react';
-import { Product, Category } from '../types';
+import { Product, Category, Subcategory } from '../types';
 
 interface ProductFormProps {
   initialData?: Product;
@@ -37,6 +38,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     status: 'active',
     categoryId: '',
     subcategoryIds: [],
+    subcategory_stock: {},
     tags: [],
     images: []
   });
@@ -49,6 +51,33 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     if (!initialData || isClone) return false;
     return formData.stock !== initialData.stock;
   }, [formData.stock, initialData, isClone]);
+
+  const selectedCategory = useMemo(() => {
+    if (!formData.categoryId) return null;
+    return categories.find(c => String(c.id) === String(formData.categoryId));
+  }, [categories, formData.categoryId]);
+
+  const selectedSubcategories = useMemo(() => {
+    if (!selectedCategory || !formData.subcategoryIds) return [];
+    return selectedCategory.subcategories?.filter(s => formData.subcategoryIds?.includes(s.id)) || [];
+  }, [selectedCategory, formData.subcategoryIds]);
+
+  // Atualiza o estoque total sempre que houver mudança nos estoques das subcategorias
+  useEffect(() => {
+    if (formData.subcategoryIds && formData.subcategoryIds.length > 0) {
+      const total = Object.entries(formData.subcategory_stock || {}).reduce((acc, [id, qty]) => {
+        // Apenas soma se o ID ainda estiver na lista de subcategorias selecionadas
+        if (formData.subcategoryIds?.includes(id) || formData.subcategoryIds?.includes(Number(id))) {
+          return acc + (Number(qty) || 0);
+        }
+        return acc;
+      }, 0);
+      
+      if (total !== formData.stock) {
+        setFormData(prev => ({ ...prev, stock: total }));
+      }
+    }
+  }, [formData.subcategory_stock, formData.subcategoryIds]);
 
   // Máscara de Moeda
   const formatCurrency = (value: number | string) => {
@@ -66,11 +95,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     const numericValue = parseFloat(rawValue) / 100;
     setFormData(prev => ({ ...prev, price: numericValue || 0 }));
   };
-
-  const selectedCategory = useMemo(() => {
-    if (!formData.categoryId) return null;
-    return categories.find(c => String(c.id) === String(formData.categoryId));
-  }, [categories, formData.categoryId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,18 +117,16 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
       return;
     }
 
-    // Calcula quantas imagens ainda podem ser adicionadas
     const remainingSlots = 5 - currentImagesCount;
     const filesToProcess = Array.from(files).slice(0, remainingSlots);
 
-    // Fix: Explicitly type 'file' as 'File' to resolve the 'unknown' type error in readAsDataURL.
     filesToProcess.forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const base64 = event.target?.result as string;
         setFormData(prev => ({
           ...prev,
-          images: [...(prev.images || []), base64].slice(0, 5) // Garante o limite no estado
+          images: [...(prev.images || []), base64].slice(0, 5)
         }));
       };
       reader.readAsDataURL(file);
@@ -117,33 +139,65 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
     setFormData(prev => ({
       ...prev,
       categoryId: catId,
-      subcategoryIds: [] // Limpa ao trocar categoria pai
+      subcategoryIds: [],
+      subcategory_stock: {}
     }));
   };
 
   const toggleSubcategory = (subId: string | number) => {
     setFormData(prev => {
       const ids = prev.subcategoryIds || [];
+      const stock = { ...prev.subcategory_stock } || {};
       const exists = ids.includes(subId);
+      
+      let newIds;
+      if (exists) {
+        newIds = ids.filter(id => id !== subId);
+        delete stock[String(subId)];
+      } else {
+        newIds = [...ids, subId];
+        stock[String(subId)] = 0;
+      }
+
       return {
         ...prev,
-        subcategoryIds: exists ? ids.filter(id => id !== subId) : [...ids, subId]
+        subcategoryIds: newIds,
+        subcategory_stock: stock
       };
     });
+  };
+
+  const handleSubStockChange = (subId: string | number, qty: number) => {
+    const safeQty = Math.max(0, qty);
+    setFormData(prev => ({
+      ...prev,
+      subcategory_stock: {
+        ...(prev.subcategory_stock || {}),
+        [String(subId)]: safeQty
+      }
+    }));
   };
 
   const selectAllSubcategories = () => {
     if (!selectedCategory || !selectedCategory.subcategories) return;
     const allIds = selectedCategory.subcategories.map(s => s.id);
+    const newStock: Record<string, number> = {};
+    allIds.forEach(id => {
+      newStock[String(id)] = formData.subcategory_stock?.[String(id)] || 0;
+    });
+
     setFormData(prev => ({
       ...prev,
-      subcategoryIds: allIds
+      subcategoryIds: allIds,
+      subcategory_stock: newStock
     }));
   };
 
   const clearSubcategories = () => {
-    setFormData(prev => ({ ...prev, subcategoryIds: [] }));
+    setFormData(prev => ({ ...prev, subcategoryIds: [], subcategory_stock: {} }));
   };
+
+  const hasSubcategories = selectedSubcategories.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto pb-32 sm:pb-20 animate-in slide-in-from-right-4 duration-500 px-2 sm:px-0">
@@ -174,6 +228,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+        {/* Informações Básicas */}
         <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-5 sm:mb-6 text-slate-800">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -234,6 +289,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
           </div>
         </section>
 
+        {/* Estoque e Classificação */}
         <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-5 sm:mb-6">
             <div className="flex items-center gap-2 text-slate-800">
@@ -256,13 +312,30 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Estoque Disponível</label>
-              <input 
-                type="number" 
-                value={formData.stock}
-                onChange={(e) => setFormData(prev => ({ ...prev, stock: parseInt(e.target.value) || 0 }))}
-                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-black text-slate-800"
-              />
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                {hasSubcategories ? 'Estoque Total (Auto)' : 'Estoque Disponível'}
+              </label>
+              <div className="relative">
+                <input 
+                  type="number" 
+                  readOnly={hasSubcategories}
+                  value={formData.stock}
+                  onChange={(e) => setFormData(prev => ({ ...prev, stock: parseInt(e.target.value) || 0 }))}
+                  className={`w-full px-4 py-3.5 border rounded-xl focus:ring-4 focus:ring-indigo-50/50 outline-none font-black ${
+                    hasSubcategories 
+                      ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' 
+                      : 'bg-slate-50 text-slate-800 border-slate-100'
+                  }`}
+                />
+                {hasSubcategories && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <Check className="text-indigo-500" size={16} />
+                  </div>
+                )}
+              </div>
+              {hasSubcategories && (
+                <p className="text-[9px] font-bold text-indigo-400 uppercase px-1">Soma das variações abaixo</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -283,7 +356,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
               </div>
             </div>
 
-            {isStockModified && (
+            {isStockModified && !hasSubcategories && (
               <div className="space-y-2 col-span-1 md:col-span-2 animate-in slide-in-from-top-2 duration-300">
                 <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest px-1 flex items-center gap-2">
                   <MessageSquare size={14} /> Por que você está alterando o estoque?
@@ -298,55 +371,82 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
               </div>
             )}
 
+            {/* Gerenciamento de Subcategorias e Estoque por Variação */}
             {selectedCategory && selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
-              <div className="space-y-4 animate-in slide-in-from-top-2 duration-300 col-span-1 md:col-span-2">
-                <div className="flex items-center justify-between px-1">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
-                    <Layers size={14} /> Subcategorias de {selectedCategory.name}
-                  </label>
-                  <div className="flex gap-3">
-                    <button 
-                      type="button" 
-                      onClick={selectAllSubcategories}
-                      className="text-[9px] font-black text-indigo-600 uppercase hover:underline"
-                    >
-                      Selecionar Todas
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={clearSubcategories}
-                      className="text-[9px] font-black text-slate-400 uppercase hover:underline"
-                    >
-                      Limpar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {selectedCategory.subcategories.map(sub => {
-                    const isSelected = formData.subcategoryIds?.includes(sub.id);
-                    return (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => toggleSubcategory(sub.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border-2 ${
-                          isSelected 
-                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' 
-                            : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-indigo-200'
-                        }`}
+              <div className="space-y-6 animate-in slide-in-from-top-2 duration-300 col-span-1 md:col-span-2">
+                <div className="pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between px-1 mb-4">
+                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
+                      <Layers size={14} /> Seleção de Variações
+                    </label>
+                    <div className="flex gap-3">
+                      <button 
+                        type="button" 
+                        onClick={selectAllSubcategories}
+                        className="text-[9px] font-black text-indigo-600 uppercase hover:underline"
                       >
-                        {isSelected && <Check size={14} className="stroke-[4]" />}
-                        {sub.name}
+                        Selecionar Todas
                       </button>
-                    );
-                  })}
+                      <button 
+                        type="button" 
+                        onClick={clearSubcategories}
+                        className="text-[9px] font-black text-slate-400 uppercase hover:underline"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-8">
+                    {selectedCategory.subcategories.map(sub => {
+                      const isSelected = formData.subcategoryIds?.includes(sub.id);
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => toggleSubcategory(sub.id)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border-2 ${
+                            isSelected 
+                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' 
+                              : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-indigo-200'
+                          }`}
+                        >
+                          {isSelected && <Check size={14} className="stroke-[4]" />}
+                          {sub.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {hasSubcategories && (
+                    <div className="space-y-4 animate-in slide-in-from-top-4 duration-500">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Quantidade por Variação</label>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {selectedSubcategories.map(sub => (
+                            <div key={sub.id} className="flex items-center justify-between p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl group transition-all hover:bg-white hover:shadow-md">
+                              <span className="font-bold text-xs text-indigo-900 uppercase truncate pr-2">{sub.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[8px] font-black text-indigo-300 uppercase">Qtd</span>
+                                <input 
+                                  type="number"
+                                  min="0"
+                                  value={formData.subcategory_stock?.[String(sub.id)] || 0}
+                                  onChange={(e) => handleSubStockChange(sub.id, parseInt(e.target.value) || 0)}
+                                  className="w-16 px-2 py-1.5 bg-white border border-indigo-200 rounded-lg text-center font-black text-xs text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
         </section>
 
+        {/* Imagens do Produto */}
         <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-5 sm:mb-6">
             <div className="flex items-center gap-2 text-slate-800">
@@ -394,13 +494,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
               </div>
             )}
           </div>
-          {(formData.images?.length || 0) >= 5 && (
-            <p className="mt-3 text-[9px] font-black text-amber-600 uppercase tracking-widest text-center">
-              Limite de 5 imagens atingido. Remova uma para adicionar outra.
-            </p>
-          )}
         </section>
 
+        {/* Rodapé fixo de Ações */}
         <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 sm:p-6 bg-white/90 backdrop-blur-md border-t border-slate-100 flex items-center justify-between sm:justify-end gap-3 sm:gap-6 z-40 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
           <button 
             type="button"

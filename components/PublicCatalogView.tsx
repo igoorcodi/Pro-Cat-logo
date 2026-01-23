@@ -1015,19 +1015,28 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                         <Layers size={14}/> Selecione uma Opção
                       </h4>
                       <div className="flex flex-wrap gap-2">
-                        {productSubs.map(sub => (
-                          <button 
-                            key={sub.id}
-                            onClick={() => setSelectedSubForModal(sub)}
-                            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border-2 ${
-                              selectedSubForModal?.id === sub.id 
-                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
-                                : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-indigo-200'
-                            }`}
-                          >
-                            {sub.name}
-                          </button>
-                        ))}
+                        {productSubs.map(sub => {
+                          const subStock = viewingProduct.subcategory_stock?.[String(sub.id)] ?? 0;
+                          const isOutOfStock = subStock <= 0;
+                          
+                          return (
+                            <button 
+                              key={sub.id}
+                              disabled={isOutOfStock}
+                              onClick={() => setSelectedSubForModal(sub)}
+                              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border-2 flex items-center gap-2 ${
+                                selectedSubForModal?.id === sub.id 
+                                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+                                  : isOutOfStock 
+                                    ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed opacity-50'
+                                    : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-indigo-200'
+                              }`}
+                            >
+                              {sub.name}
+                              {isOutOfStock && <span className="text-[8px] bg-red-100 text-red-500 px-1 rounded ml-1">Esgotado</span>}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -1042,18 +1051,24 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 
                 {/* Validação de subcategoria antes de adicionar */}
                 {(() => {
-                  const hasSubs = getProductSubcategories(viewingProduct).length > 0;
-                  const canAdd = !hasSubs || selectedSubForModal;
+                  const subcategories = getProductSubcategories(viewingProduct);
+                  const hasSubs = subcategories.length > 0;
+                  
+                  // Se tem variações, precisa selecionar uma
+                  const canAdd = !hasSubs || (selectedSubForModal && (viewingProduct.subcategory_stock?.[String(selectedSubForModal.id)] ?? 0) > 0);
+                  
+                  // Verificação global de estoque se não tiver variações
+                  const isGlobalOutOfStock = !hasSubs && (viewingProduct.stock <= 0);
 
                   return (
                     <button 
                       onClick={() => addToCart(viewingProduct, selectedSubForModal)} 
-                      disabled={!canAdd}
+                      disabled={!canAdd || isGlobalOutOfStock}
                       className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 text-white hover:brightness-110 disabled:opacity-50 disabled:grayscale disabled:active:scale-100`}
-                      style={{ backgroundColor: primaryColor }}
+                      style={{ backgroundColor: isGlobalOutOfStock ? '#94a3b8' : primaryColor }}
                     >
                       <ShoppingCart size={20}/> 
-                      {canAdd ? 'Adicionar ao Carrinho' : 'Escolha uma opção acima'}
+                      {isGlobalOutOfStock ? 'Produto Esgotado' : (canAdd ? 'Adicionar ao Carrinho' : 'Escolha uma opção disponível')}
                     </button>
                   );
                 })()}

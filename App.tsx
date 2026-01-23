@@ -253,6 +253,7 @@ const App: React.FC = () => {
               setPublicProducts(prodData.map(p => ({ 
                 ...p, 
                 subcategoryIds: p.subcategory_ids || [],
+                subcategory_stock: p.subcategory_stock || {},
                 category: catData?.find(c => c.id === p.category_id && c.user_id === catalogData.user_id)?.name || 'Sem Categoria',
                 createdAt: p.created_at 
               })));
@@ -329,6 +330,7 @@ const App: React.FC = () => {
               ...p, 
               categoryId: p.category_id, 
               subcategoryIds: p.subcategory_ids || [],
+              subcategory_stock: p.subcategory_stock || {},
               category: catData?.find(c => c.id === p.category_id && c.user_id === user.id)?.name || 'Sem Categoria', 
               createdAt: p.created_at 
             })));
@@ -535,6 +537,7 @@ const App: React.FC = () => {
       user_id: user.id,
       category_id: product.categoryId || null,
       subcategory_ids: product.subcategoryIds || [],
+      subcategory_stock: product.subcategory_stock || {},
       stock_history: historyEntries 
     }, isActuallyNew);
     
@@ -614,8 +617,8 @@ const App: React.FC = () => {
       logo_url: catalog.logoUrl,
       primary_color: catalog.primaryColor,
       product_ids: catalog.productIds,
-      cover_title: catalog.coverTitle,
-      cover_subtitle: catalog.coverSubtitle,
+      cover_title: catalog.cover_title,
+      cover_subtitle: catalog.cover_subtitle,
       title_font_size: catalog.titleFontSize,
       subtitle_font_size: catalog.subtitleFontSize
     }, isActuallyNew);
