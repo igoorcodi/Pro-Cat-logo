@@ -23,10 +23,27 @@ export type AppView =
   | 'public-catalog'
   | 'customers'
   | 'customer-form'
+  | 'promotions'
   | 'reset-password'
   | 'login'
   | 'register'
   | 'onboarding';
+
+/* Promotion/Coupon interface */
+export interface Promotion {
+  id: string | number;
+  user_id: string | number;
+  code: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  min_order_value: number;
+  max_discount_value: number; // Novo campo
+  usage_limit: number;        // Novo campo
+  usage_count: number;        // Novo campo
+  expiry_date?: string;
+  status: 'active' | 'inactive';
+  created_at?: string;
+}
 
 /* System User interface */
 export interface User {

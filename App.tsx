@@ -18,10 +18,11 @@ import {
   AlertTriangle,
   Loader2,
   ListChecks,
-  History
+  History,
+  Ticket
 } from 'lucide-react';
 import { supabase } from './supabase';
-import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry, PaymentMethod } from './types';
+import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry, PaymentMethod, Promotion } from './types';
 import Dashboard from './components/Dashboard';
 import ProductList from './components/ProductList';
 import ProductForm from './components/ProductForm';
@@ -39,6 +40,7 @@ import ShareCatalogModal from './components/ShareCatalogModal';
 import CustomerList from './components/CustomerList';
 import CustomerForm from './components/CustomerForm';
 import ConfirmationModal from './components/ConfirmationModal';
+import PromotionManager from './components/PromotionManager';
 
 const viewTitles: Record<string, string> = {
   'dashboard': 'Dashboard',
@@ -55,6 +57,7 @@ const viewTitles: Record<string, string> = {
   'public-catalog': 'Vitrine Digital',
   'customers': 'Clientes',
   'customer-form': 'Gerenciar Cliente',
+  'promotions': 'Promoções e Cupons',
   'reset-password': 'Redefinir Senha'
 };
 
@@ -84,6 +87,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   
   const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
   const [isCloning, setIsCloning] = useState(false);
@@ -101,7 +105,7 @@ const App: React.FC = () => {
 
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
-    type: 'product' | 'customer' | 'quotation' | 'catalog';
+    type: 'product' | 'customer' | 'quotation' | 'catalog' | 'promotion';
     id: number | string;
     title: string;
     message: string;
@@ -156,6 +160,7 @@ const App: React.FC = () => {
     setCustomers([]);
     setCompany(null);
     setPaymentMethods([]);
+    setPromotions([]);
     setSidebarOpen(false);
   }, []);
 
@@ -224,6 +229,15 @@ const App: React.FC = () => {
               .maybeSingle();
             
             if (companyData) setCompany(companyData);
+
+            // Carregar promoções ativas para a vitrine
+            const { data: promoData } = await supabase
+              .from('promotions')
+              .select('*')
+              .eq('user_id', sellerData.id)
+              .eq('status', 'active');
+            
+            if (promoData) setPromotions(promoData);
           }
 
           const productIds = catalogData.product_ids || [];
@@ -392,6 +406,18 @@ const App: React.FC = () => {
         } catch (e) {}
       };
 
+      const fetchPromotions = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('promotions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('id', { ascending: false });
+          if (error) throw error;
+          if (data) setPromotions(data);
+        } catch (e) {}
+      };
+
       const categoriesData = await fetchCategories();
       setCategories(categoriesData);
       
@@ -401,7 +427,8 @@ const App: React.FC = () => {
         fetchQuotations(),
         fetchCustomers(),
         fetchCompany(),
-        fetchPaymentMethods()
+        fetchPaymentMethods(),
+        fetchPromotions()
       ]);
 
     } catch (error) {
@@ -686,7 +713,21 @@ const App: React.FC = () => {
     }
   };
 
-  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation' | 'catalog', id: number | string, name: string) => {
+  const handleSavePromotion = async (promo: Partial<Promotion>) => {
+    if (!user) return;
+    const id = promo.id;
+    const isNew = !id;
+    const payload = sanitizePayload({ ...promo, user_id: user.id }, isNew);
+
+    const { error } = isNew
+      ? await supabase.from('promotions').insert(payload)
+      : await supabase.from('promotions').update(payload).eq('id', id).eq('user_id', user.id);
+
+    if (error) alert("Erro ao salvar promoção: " + formatSupabaseError(error));
+    else { fetchData(); navigateTo('promotions'); }
+  };
+
+  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation' | 'catalog' | 'promotion', id: number | string, name: string) => {
     setDeleteModal({ 
       isOpen: true, 
       type, 
@@ -708,6 +749,7 @@ const App: React.FC = () => {
         case 'customer': table = 'customers'; break;
         case 'quotation': table = 'quotations'; break;
         case 'catalog': table = 'catalogs'; break;
+        case 'promotion': table = 'promotions'; break;
       }
 
       const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', user.id);
@@ -742,6 +784,7 @@ const App: React.FC = () => {
         isLoading={isLoadingData}
         error={publicCatalogError}
         categories={categories}
+        promotions={promotions}
         onBack={() => {
           if (user) setView('catalogs'); else setView('login');
           safeReplaceState('');
@@ -775,6 +818,7 @@ const App: React.FC = () => {
           <NavItem icon={<Users size={20} />} label="Clientes" active={view === 'customers'} onClick={() => navigateTo('customers')} />
           <NavItem icon={<Package size={20} />} label="Produtos" active={view === 'products' || view === 'stock-adjustment'} onClick={() => navigateTo('products')} />
           <NavItem icon={<Tags size={20} />} label="Categorias" active={view === 'categories'} onClick={() => navigateTo('categories')} />
+          <NavItem icon={<Ticket size={20} />} label="Promoções" active={view === 'promotions'} onClick={() => navigateTo('promotions')} />
           <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />
           <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />
           <div className="pt-6 mt-6 border-t border-slate-800">
@@ -812,10 +856,11 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
-            {['customers', 'quotations'].includes(view) && (
+            {['customers', 'quotations', 'promotions'].includes(view) && (
               <button onClick={() => {
                 if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
                 else if (view === 'quotations') { setEditingQuotation(undefined); setView('quotation-form'); }
+                else if (view === 'promotions') { /* Handled inside manager */ }
               }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
               </button>
@@ -847,6 +892,7 @@ const App: React.FC = () => {
           )}
           {view === 'stock-adjustment' && <StockAdjustment products={products} onSave={handleSaveBatchStock} onCancel={() => setView('products')} />}
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
+          {view === 'promotions' && <PromotionManager promotions={promotions} onSave={handleSavePromotion} onDelete={(id, name) => openDeleteConfirmation('promotion', id, name)} />}
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} paymentMethods={paymentMethods} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}

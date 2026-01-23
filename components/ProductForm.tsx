@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   X, 
@@ -85,23 +84,32 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if ((formData.images?.length || 0) >= 5) {
+    const currentImagesCount = formData.images?.length || 0;
+    if (currentImagesCount >= 5) {
       alert("Limite máximo de 5 imagens atingido.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setFormData(prev => ({
-        ...prev,
-        images: [...(prev.images || []), base64]
-      }));
-    };
-    reader.readAsDataURL(file);
+    // Calcula quantas imagens ainda podem ser adicionadas
+    const remainingSlots = 5 - currentImagesCount;
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+
+    // Fix: Explicitly type 'file' as 'File' to resolve the 'unknown' type error in readAsDataURL.
+    filesToProcess.forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setFormData(prev => ({
+          ...prev,
+          images: [...(prev.images || []), base64].slice(0, 5) // Garante o limite no estado
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+
     e.target.value = '';
   };
 
@@ -340,11 +348,16 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
         </section>
 
         <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-5 sm:mb-6 text-slate-800">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-              <ImageIcon size={18} />
+          <div className="flex items-center justify-between mb-5 sm:mb-6">
+            <div className="flex items-center gap-2 text-slate-800">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                <ImageIcon size={18} />
+              </div>
+              <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Imagens do Produto</h3>
             </div>
-            <h3 className="font-black text-base sm:text-lg uppercase tracking-tight">Imagens do Produto</h3>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {formData.images?.length || 0} / 5 Imagens
+            </div>
           </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
@@ -367,6 +380,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
                   ref={fileInputRef} 
                   onChange={handleFileChange} 
                   accept="image/*" 
+                  multiple
                   className="hidden" 
                 />
                 <button 
@@ -380,6 +394,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, categories, isCl
               </div>
             )}
           </div>
+          {(formData.images?.length || 0) >= 5 && (
+            <p className="mt-3 text-[9px] font-black text-amber-600 uppercase tracking-widest text-center">
+              Limite de 5 imagens atingido. Remova uma para adicionar outra.
+            </p>
+          )}
         </section>
 
         <div className="fixed bottom-0 left-0 right-0 lg:left-72 p-4 sm:p-6 bg-white/90 backdrop-blur-md border-t border-slate-100 flex items-center justify-between sm:justify-end gap-3 sm:gap-6 z-40 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
