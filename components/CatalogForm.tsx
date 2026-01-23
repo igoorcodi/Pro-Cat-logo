@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload, AlertCircle, FileImage, Link as LinkIcon, Building2, ImageOff, Palette, Hash } from 'lucide-react';
+import { X, Save, Trash2, Image as ImageIcon, Search, Check, Upload, AlertCircle, FileImage, Link as LinkIcon, Building2, ImageOff, Palette, Hash, Type, Type as TypeIcon } from 'lucide-react';
 import { Catalog, Product } from '../types';
 
 interface CatalogFormProps {
@@ -34,6 +34,10 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
     primaryColor: DEFAULT_SYSTEM_COLOR,
     productIds: [],
     createdAt: new Date().toISOString(),
+    coverTitle: '',
+    coverSubtitle: '',
+    titleFontSize: 'lg',
+    subtitleFontSize: 'md',
     ...initialData
   });
 
@@ -145,9 +149,8 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
 
         <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row bg-slate-50/30">
           <div className="w-full lg:w-1/2 p-5 sm:p-8 lg:p-10 lg:overflow-y-auto border-b lg:border-b-0 lg:border-r border-slate-100 bg-white">
-            <form id="catalog-form" onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+            <form id="catalog-form" onSubmit={handleSubmit} className="space-y-6 sm:space-y-8 pb-10">
               
-              {/* Seção de Cores com Fallback */}
               <div className="p-5 bg-slate-50 border border-slate-100 rounded-3xl space-y-5">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
@@ -190,7 +193,66 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                     </button>
                   ))}
                 </div>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Dica: Deixe em branco ou use #4F46E5 para usar o padrão do sistema.</p>
+              </div>
+
+              <div className="p-5 bg-slate-50 border border-slate-100 rounded-3xl space-y-6">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <TypeIcon size={14} style={{ color: activePrimaryColor }} /> Conteúdo da Capa
+                </label>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Título Principal (Banner)</label>
+                      <div className="flex gap-1">
+                        {(['sm', 'md', 'lg', 'xl'] as const).map(size => (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => setFormData({...formData, titleFontSize: size})}
+                            className={`w-6 h-6 rounded flex items-center justify-center text-[9px] font-black uppercase transition-all ${formData.titleFontSize === size ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-400 hover:bg-slate-100'}`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input 
+                      type="text"
+                      value={formData.coverTitle || ''}
+                      onChange={e => setFormData(prev => ({ ...prev, coverTitle: e.target.value }))}
+                      placeholder="Ex: Coleção Verão 2025"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 outline-none font-bold text-slate-800"
+                      style={{ '--tw-ring-color': activePrimaryColor + '20' } as React.CSSProperties}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Texto Secundário / Slogan</label>
+                      <div className="flex gap-1">
+                        {(['sm', 'md', 'lg'] as const).map(size => (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => setFormData({...formData, subtitleFontSize: size})}
+                            className={`w-6 h-6 rounded flex items-center justify-center text-[9px] font-black uppercase transition-all ${formData.subtitleFontSize === size ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-400 hover:bg-slate-100'}`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input 
+                      type="text"
+                      value={formData.coverSubtitle || ''}
+                      onChange={e => setFormData(prev => ({ ...prev, coverSubtitle: e.target.value }))}
+                      placeholder="Ex: As melhores ofertas estão aqui"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 outline-none font-bold text-slate-600"
+                      style={{ '--tw-ring-color': activePrimaryColor + '20' } as React.CSSProperties}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-2">
@@ -198,9 +260,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                   <LinkIcon size={14} /> Link Personalizado
                 </label>
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:block px-3 py-2 bg-indigo-100/50 border border-indigo-200 rounded-xl text-[10px] font-black text-indigo-400 whitespace-nowrap">
-                    .../?c=
-                  </div>
                   <input 
                     type="text"
                     value={formData.slug || ''}
@@ -240,25 +299,11 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                       className="hidden" 
                     />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Logotipo específico para este catálogo.
-                    </p>
-                    {formData.logoUrl && (
-                      <button 
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
-                        className="mt-2 text-[9px] font-black text-red-500 uppercase tracking-widest hover:text-red-700"
-                      >
-                        Remover Logo
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome da Vitrine*</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Nome Administrativo do Catálogo*</label>
                 <input 
                   required
                   type="text"
@@ -266,18 +311,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                   onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Ex: Coleção Inverno 2024"
                   className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 outline-none font-bold text-slate-800"
-                  style={{ '--tw-ring-color': activePrimaryColor + '20' } as React.CSSProperties}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Breve Descrição</label>
-                <textarea 
-                  rows={3}
-                  value={formData.description || ''}
-                  onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Conte um pouco sobre essa coleção..."
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 outline-none resize-none font-medium text-sm"
                   style={{ '--tw-ring-color': activePrimaryColor + '20' } as React.CSSProperties}
                 />
               </div>
@@ -305,9 +338,9 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                       <img 
                         src={formData.coverImage} 
                         alt="Capa" 
-                        className="absolute inset-0 w-full h-full object-cover" 
+                        className="absolute inset-0 w-full h-full object-cover opacity-60" 
                       />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="px-4 py-2 bg-white text-slate-900 rounded-full font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                           <Upload size={14} /> Trocar Imagem
                         </div>
@@ -382,11 +415,6 @@ const CatalogForm: React.FC<CatalogFormProps> = ({ initialData, products, onClos
                   </div>
                 );
               })}
-              {filteredProducts.length === 0 && (
-                <div className="text-center py-10 opacity-30">
-                  <p className="font-black uppercase tracking-widest text-[10px]">Nenhum produto encontrado</p>
-                </div>
-              )}
             </div>
           </div>
         </div>

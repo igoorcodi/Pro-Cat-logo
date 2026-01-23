@@ -265,7 +265,11 @@ const App: React.FC = () => {
             coverImage: catalogData.cover_image,
             logoUrl: catalogData.logo_url,
             primaryColor: catalogData.primary_color,
-            createdAt: catalogData.created_at
+            createdAt: catalogData.created_at,
+            coverTitle: catalogData.cover_title,
+            coverSubtitle: catalogData.cover_subtitle,
+            titleFontSize: catalogData.title_font_size,
+            subtitleFontSize: catalogData.subtitle_font_size
           });
           setIsLoadingData(false);
         } else {
@@ -347,7 +351,11 @@ const App: React.FC = () => {
             coverImage: c.cover_image, 
             logoUrl: c.logo_url, 
             primaryColor: c.primary_color,
-            createdAt: c.created_at 
+            createdAt: c.created_at,
+            coverTitle: c.cover_title,
+            coverSubtitle: c.cover_subtitle,
+            titleFontSize: c.title_font_size,
+            subtitleFontSize: c.subtitle_font_size
           })));
         } catch (e) {}
       };
@@ -605,12 +613,20 @@ const App: React.FC = () => {
       cover_image: catalog.coverImage,
       logo_url: catalog.logoUrl,
       primary_color: catalog.primaryColor,
-      product_ids: catalog.productIds
+      product_ids: catalog.productIds,
+      cover_title: catalog.coverTitle,
+      cover_subtitle: catalog.coverSubtitle,
+      title_font_size: catalog.titleFontSize,
+      subtitle_font_size: catalog.subtitleFontSize
     }, isActuallyNew);
     delete dataToSave.coverImage;
     delete dataToSave.logoUrl;
     delete dataToSave.primaryColor;
     delete dataToSave.productIds;
+    delete dataToSave.coverTitle;
+    delete dataToSave.coverSubtitle;
+    delete dataToSave.titleFontSize;
+    delete dataToSave.subtitleFontSize;
 
     const { error } = isActuallyNew 
       ? await supabase.from('catalogs').insert(dataToSave)

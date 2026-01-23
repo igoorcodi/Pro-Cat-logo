@@ -101,7 +101,33 @@ export interface Product {
 
 export interface Category { id: string | number; name: string; user_id: string | number; status: 'active' | 'inactive'; subcategories?: Subcategory[]; }
 export interface Subcategory { id: string | number; name: string; category_id: string | number; user_id: string | number; status: 'active' | 'inactive'; }
-export interface Catalog { id: string | number; user_id: string | number; name: string; slug: string; description: string; cover_image?: string; coverImage?: string; logo_url?: string; logoUrl?: string; primary_color?: string; primaryColor?: string; product_ids: (string | number)[]; productIds: (string | number)[]; createdAt?: string; created_at?: string; status: 'active' | 'inactive'; }
+
+export interface Catalog { 
+  id: string | number; 
+  user_id: string | number; 
+  name: string; 
+  slug: string; 
+  description: string; 
+  cover_image?: string; 
+  coverImage?: string; 
+  logo_url?: string; 
+  logoUrl?: string; 
+  primary_color?: string; 
+  primaryColor?: string; 
+  product_ids: (string | number)[]; 
+  productIds: (string | number)[]; 
+  createdAt?: string; 
+  created_at?: string; 
+  status: 'active' | 'inactive';
+  coverTitle?: string;
+  cover_title?: string;
+  coverSubtitle?: string;
+  cover_subtitle?: string;
+  titleFontSize?: 'sm' | 'md' | 'lg' | 'xl';
+  title_font_size?: 'sm' | 'md' | 'lg' | 'xl';
+  subtitleFontSize?: 'sm' | 'md' | 'lg';
+  subtitle_font_size?: 'sm' | 'md' | 'lg';
+}
 
 export interface Customer {
   id: string | number;

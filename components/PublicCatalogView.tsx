@@ -29,6 +29,7 @@ import {
   CreditCard,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Ticket,
   AlertCircle,
   Copy,
@@ -38,7 +39,9 @@ import {
   LogOut,
   Lock,
   UserPlus,
-  UserCircle
+  UserCircle,
+  Layers,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabase';
 
@@ -59,8 +62,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>('Todos');
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | number>('Todas');
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  const [selectedSubForModal, setSelectedSubForModal] = useState<Subcategory | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+  
+  // Controle de Carrossel nos Cards
+  const [cardImageIndexes, setCardImageIndexes] = useState<Record<string | number, number>>({});
   
   // Autenticação do Cliente
   const [loggedCustomer, setLoggedCustomer] = useState<Customer | null>(null);
@@ -71,7 +78,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [usedPromotionIds, setUsedPromotionIds] = useState<(string | number)[]>([]);
 
   const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', password: '' });
-  const [selectedSubForOrder, setSelectedSubForOrder] = useState<Subcategory | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Cupons
@@ -94,6 +100,14 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       }
     }
   }, [catalog?.id]);
+
+  // Limpa seleção ao fechar modal
+  useEffect(() => {
+    if (!viewingProduct) {
+      setSelectedSubForModal(null);
+      setCurrentImageIndex(0); // Reseta carrossel do modal
+    }
+  }, [viewingProduct]);
 
   const fetchUsedCoupons = async (customerId: string | number) => {
     if (!catalog?.user_id) return;
@@ -291,7 +305,57 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
   const handleCategoryChange = (cat: string) => { setSelectedCategoryName(cat); setSelectedSubcategoryId('Todas'); };
 
+  // Funções de Carrossel do Card
+  const getCardActiveImage = (productId: string | number) => cardImageIndexes[productId] || 0;
+  
+  const handlePrevCardImage = (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    const imgs = product.images || [];
+    if (imgs.length <= 1) return;
+    const current = getCardActiveImage(product.id);
+    const next = current === 0 ? imgs.length - 1 : current - 1;
+    setCardImageIndexes(prev => ({ ...prev, [product.id]: next }));
+  };
+
+  const handleNextCardImage = (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    const imgs = product.images || [];
+    if (imgs.length <= 1) return;
+    const current = getCardActiveImage(product.id);
+    const next = (current + 1) % imgs.length;
+    setCardImageIndexes(prev => ({ ...prev, [product.id]: next }));
+  };
+
+  // Helper para buscar nomes das subcategorias
+  const getProductSubcategories = (product: Product) => {
+    const ids = product.subcategoryIds || product.subcategory_ids || [];
+    if (ids.length === 0) return [];
+
+    const result: Subcategory[] = [];
+    categories.forEach(cat => {
+      cat.subcategories?.forEach(sub => {
+        if (ids.includes(sub.id)) {
+          result.push(sub);
+        }
+      });
+    });
+    return result;
+  };
+
   const displayLogoUrl = catalog?.logoUrl || company?.logo_url;
+
+  const titleFontSizeClasses = {
+    sm: 'text-2xl sm:text-3xl',
+    md: 'text-3xl sm:text-5xl',
+    lg: 'text-4xl sm:text-6xl',
+    xl: 'text-5xl sm:text-7xl'
+  };
+
+  const subtitleFontSizeClasses = {
+    sm: 'text-xs sm:text-sm',
+    md: 'text-sm sm:text-lg',
+    lg: 'text-lg sm:text-2xl'
+  };
 
   if (error) {
     return (
@@ -356,15 +420,39 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       </header>
 
-      <div className="shrink-0 relative h-48 sm:h-64 overflow-hidden">
+      {/* Capa com Visual Moderno e Textos Customizados */}
+      <div className="shrink-0 relative h-96 sm:h-[32rem] lg:h-[60vh] overflow-hidden bg-slate-900">
         {catalog?.coverImage ? (
-          <img src={catalog.coverImage} className="w-full h-full object-cover brightness-75" alt="Capa" />
+          <img src={catalog.coverImage} className="w-full h-full object-cover" alt="Capa" />
         ) : (
-          <div className="w-full h-full bg-slate-900" />
+          <div className="w-full h-full bg-slate-800" />
         )}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-          <h1 className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg">{catalog?.name || 'Catálogo Virtual'}</h1>
-          <p className="text-white/90 text-xs sm:text-sm mt-2 max-w-md line-clamp-2">{catalog?.description}</p>
+        {/* Overlay para destaque de texto */}
+        <div className="absolute inset-0 bg-black/50 bg-gradient-to-t from-black/80 via-black/40 to-black/30 flex flex-col items-center justify-center text-center p-6 sm:p-12">
+          <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
+            {catalog?.coverTitle ? (
+              <h1 className={`${titleFontSizeClasses[catalog.titleFontSize || 'lg']} font-black text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] leading-tight mb-4 uppercase tracking-tighter`}>
+                {catalog.coverTitle}
+              </h1>
+            ) : (
+              <h1 className="text-3xl sm:text-5xl font-black text-white drop-shadow-lg mb-4">{catalog?.name || 'Catálogo Virtual'}</h1>
+            )}
+            
+            {catalog?.coverSubtitle && (
+              <p className={`${subtitleFontSizeClasses[catalog.subtitleFontSize || 'md']} text-white/90 font-bold uppercase tracking-widest drop-shadow-md mb-6 max-w-2xl mx-auto leading-relaxed`}>
+                {catalog.coverSubtitle}
+              </p>
+            )}
+
+            {!catalog?.coverTitle && catalog?.description && (
+              <p className="text-white/90 text-xs sm:text-sm mt-2 max-w-md line-clamp-3 font-medium">{catalog?.description}</p>
+            )}
+            
+            {/* Scroll Indicator */}
+            <div className="mt-12 animate-bounce opacity-50">
+              <ChevronDown className="text-white" size={32} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -390,7 +478,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">{isUsed ? 'VOCÊ JÁ USOU' : 'GANHE AGORA'}</p>
                             <h3 className="text-2xl font-black tracking-tighter">
-                              {promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : `R$ ${promo.discount_value} OFF`}
+                              {promo.discount_type === 'percentage' ? `${promo.discount_value}%` : `R$ ${promo.discount_value} OFF`}
                             </h3>
                           </div>
                           <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
@@ -434,31 +522,211 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       )}
 
       {/* Grid de Produtos */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-8 my-8 mb-24 lg:mb-16">
+      <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-4 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 my-6 sm:my-8 mb-24 lg:mb-16">
         {isLoading ? (
           <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin" style={{ color: primaryColor }} size={32} /></div>
         ) : products.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase())).length > 0 ? (
-          products.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(product => (
-            <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all border border-slate-100 flex flex-col cursor-pointer h-full">
-              <div className="aspect-square bg-slate-50 overflow-hidden relative shrink-0">
-                {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageOff size={32} /></div>}
-                <div className="absolute top-3 right-3 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); addToCart(product); }} className="p-2 bg-white rounded-xl shadow-lg" style={{ color: primaryColor }}><Plus size={18} /></button>
+          products.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(product => {
+            const productSubs = getProductSubcategories(product);
+            const activeImgIdx = getCardActiveImage(product.id);
+            const imgs = product.images || [];
+            const hasMultipleImgs = imgs.length > 1;
+
+            return (
+              <div key={product.id} onClick={() => setViewingProduct(product)} className="group bg-white rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-xl transition-all border border-slate-100 flex flex-col cursor-pointer h-full relative">
+                <div className="aspect-square bg-slate-50 overflow-hidden relative shrink-0">
+                  {imgs.length > 0 ? (
+                    <img 
+                      key={`${product.id}-${activeImgIdx}`}
+                      src={imgs[activeImgIdx]} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 animate-in fade-in" 
+                      alt={product.name} 
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageOff size={32} /></div>
+                  )}
+                  
+                  {/* Navegação de Carrossel no Card */}
+                  {hasMultipleImgs && (
+                    <>
+                      <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button 
+                          onClick={(e) => handlePrevCardImage(e, product)}
+                          className="p-1.5 bg-white/80 backdrop-blur-md text-slate-800 rounded-full shadow-lg hover:bg-white active:scale-90 transition-all"
+                         >
+                           <ChevronLeft size={16} />
+                         </button>
+                         <button 
+                          onClick={(e) => handleNextCardImage(e, product)}
+                          className="p-1.5 bg-white/80 backdrop-blur-md text-slate-800 rounded-full shadow-lg hover:bg-white active:scale-90 transition-all"
+                         >
+                           <ChevronRight size={16} />
+                         </button>
+                      </div>
+                      
+                      {/* Pontos Indicadores no Card */}
+                      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+                        {imgs.map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={`w-1 h-1 rounded-full transition-all ${i === activeImgIdx ? 'w-3 bg-white' : 'bg-white/40'}`} 
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Badge de Categoria no Mobile */}
+                  <div className="absolute top-2 left-2 flex flex-wrap gap-1 sm:hidden">
+                    <span className="bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full">
+                      {product.category || 'Geral'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="p-3 sm:p-4 flex flex-col flex-1">
+                  <div className="flex-1">
+                    <div className="hidden sm:flex flex-wrap items-center gap-1.5 mb-1.5">
+                       <span className="text-[8px] font-black uppercase text-slate-400">{product.category || 'Geral'}</span>
+                       {productSubs.length > 0 && (
+                         <>
+                           <span className="text-slate-200 text-[8px]">•</span>
+                           <span className="text-[7px] font-bold text-indigo-400 bg-indigo-50 px-1.5 py-0.5 rounded-full uppercase truncate max-w-[80px]">
+                             {productSubs.map(s => s.name).join(', ')}
+                           </span>
+                         </>
+                       )}
+                    </div>
+                    <h3 className="font-bold text-slate-800 text-[11px] sm:text-sm leading-tight line-clamp-2 min-h-[2.5em] sm:min-h-0">{product.name}</h3>
+                    <div className="mt-2 flex items-center gap-2">
+                       <p className="font-black text-xs sm:text-base bg-indigo-50/50 sm:bg-transparent px-2 py-1 sm:p-0 rounded-lg" style={{ color: primaryColor }}>
+                         R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                       </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 sm:mt-4 flex gap-1.5 sm:gap-2">
+                     <button
+                       onClick={(e) => { e.stopPropagation(); setViewingProduct(product); }}
+                       className="flex-1 py-2 sm:py-3 px-1.5 sm:px-2 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-tighter sm:tracking-widest border-2 border-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-1.5"
+                     >
+                       <Info size={12} className="shrink-0 sm:size-3.5" />
+                       <span className="truncate">Ver Detalhes</span>
+                     </button>
+                     <button 
+                       onClick={(e) => { e.stopPropagation(); addToCart(product); }} 
+                       className="p-2 sm:p-3 rounded-xl sm:rounded-2xl text-white shadow-lg active:scale-90 transition-all hover:brightness-110 flex items-center justify-center shrink-0"
+                       style={{ backgroundColor: primaryColor }}
+                     >
+                       <ShoppingCart size={16} className="sm:size-[18px]" />
+                     </button>
+                  </div>
                 </div>
               </div>
-              <div className="p-4 flex flex-col flex-1 justify-between">
-                <div>
-                  <span className="text-[8px] font-black uppercase text-slate-400">{product.category || 'Geral'}</span>
-                  <h3 className="font-bold text-slate-800 text-sm leading-tight line-clamp-2 mt-1">{product.name}</h3>
-                  <p className="font-black text-base mt-2" style={{ color: primaryColor }}>R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                </div>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="col-span-full py-20 text-center opacity-40"><Package className="mx-auto mb-4" size={48} /><p className="font-black uppercase tracking-widest text-sm">Nenhum produto encontrado</p></div>
         )}
       </main>
+
+      {/* Footer da Vitrine - Exibindo Identidade da Empresa */}
+      {company && (
+        <footer className="bg-white border-t border-slate-200 mt-auto py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+              
+              {/* Coluna 1: Identidade */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  {displayLogoUrl ? (
+                    <img src={displayLogoUrl} className="w-12 h-12 rounded-xl object-cover shadow-sm" alt="Logo" />
+                  ) : (
+                    <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400">
+                      <Building2 size={24} />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-black text-slate-800 uppercase tracking-tight leading-tight">
+                      {company.trading_name || company.name}
+                    </h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {company.name}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-slate-500 text-sm font-medium max-w-xs leading-relaxed">
+                  Confira nossas coleções exclusivas e faça seu pedido direto pelo WhatsApp. Qualidade e confiança em cada item.
+                </p>
+              </div>
+
+              {/* Coluna 2: Localização */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-slate-800">
+                  <MapPin size={18} style={{ color: primaryColor }} />
+                  <h5 className="text-[10px] font-black uppercase tracking-[0.2em]">Onde Estamos</h5>
+                </div>
+                <div className="text-slate-500 text-sm font-medium space-y-1">
+                  <p>{company.address || 'Endereço não informado'}{company.number ? `, ${company.number}` : ''}</p>
+                  <p>{company.neighborhood}{company.neighborhood && company.city ? ' • ' : ''}{company.city}{company.state ? `/${company.state}` : ''}</p>
+                  {company.zip_code && <p className="text-xs font-black text-slate-400 mt-2">CEP: {company.zip_code}</p>}
+                </div>
+              </div>
+
+              {/* Coluna 3: Redes e Contato */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-2 text-slate-800">
+                  <Globe size={18} style={{ color: primaryColor }} />
+                  <h5 className="text-[10px] font-black uppercase tracking-[0.2em]">Canais de Venda</h5>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {company.whatsapp && (
+                    <a 
+                      href={`https://wa.me/${company.whatsapp.replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 hover:bg-emerald-100 transition-all font-bold text-xs"
+                    >
+                      <MessageCircle size={18} /> 
+                      <span>{company.whatsapp}</span>
+                    </a>
+                  )}
+                  {company.instagram && (
+                    <a 
+                      href={`https://instagram.com/${company.instagram.replace('@', '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 bg-pink-50 text-pink-700 rounded-2xl border border-pink-100 hover:bg-pink-100 transition-all font-bold text-xs"
+                    >
+                      <Instagram size={18} />
+                      <span>@{company.instagram.replace('@', '')}</span>
+                    </a>
+                  )}
+                  {company.email && (
+                    <div className="flex items-center gap-3 p-3 text-slate-500 font-bold text-xs">
+                      <Mail size={18} className="opacity-40" />
+                      <span>{company.email}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Rodapé Legal */}
+            <div className="pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-slate-400">
+                <ShieldCheck size={14} />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  {company.document ? `CNPJ/CPF: ${company.document}` : 'Documento não informado'}
+                </span>
+              </div>
+              <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] flex items-center gap-2">
+                <Package size={12} /> Pro Catálogo © {new Date().getFullYear()} • Vitrine Digital
+              </p>
+            </div>
+          </div>
+        </footer>
+      )}
 
       {/* Auth & Perfil Modal */}
       {isAuthModalOpen && (
@@ -560,7 +828,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                       <div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/><input required minLength={6} type="password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2" placeholder="••••••••" /></div>
                     </div>
 
-                    <button type="submit" disabled={authLoading} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50">
+                    <button type="submit" disabled={authLoading} className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg active:scale-95 disabled:opacity-70">
                       {authLoading ? <Loader2 className="animate-spin" size={20} /> : (authTab === 'login' ? <LogIn size={20}/> : <UserPlus size={20}/>)}
                       {authTab === 'login' ? 'Entrar agora' : 'Confirmar Cadastro'}
                     </button>
@@ -590,10 +858,18 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                       <div key={item.id} className="flex gap-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 group">
                         <div className="w-16 h-16 bg-white rounded-xl overflow-hidden border shrink-0">{item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-200"><ImageOff size={20}/></div>}</div>
                         <div className="flex-1 min-w-0 flex flex-col justify-between">
-                          <h4 className="font-bold text-slate-800 text-xs truncate">{item.productName}</h4>
+                          <div className="flex flex-col">
+                            <h4 className="font-bold text-slate-800 text-xs truncate">{item.productName}</h4>
+                            {item.selectedSub && <span className="text-[9px] font-black text-indigo-500 uppercase">Opção: {item.selectedSub.name}</span>}
+                          </div>
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-black text-indigo-600">R$ {item.price.toLocaleString('pt-BR')}</p>
-                            <div className="flex items-center gap-2 bg-white border rounded-lg px-1 py-0.5"><button onClick={() => updateCartQuantity(item.id, -1)} className="p-1"><Minus size={10}/></button><span className="text-xs font-black w-4 text-center">{item.quantity}</span><button onClick={() => updateCartQuantity(item.id, 1)} className="p-1"><Plus size={10}/></button></div>
+                            <div className="flex items-center gap-2 bg-white border rounded-lg px-1 py-0.5">
+                              <button onClick={() => updateCartQuantity(item.id, -1)} className="p-1"><Minus size={10}/></button>
+                              <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
+                              <button onClick={() => updateCartQuantity(item.id, 1)} className="p-1"><Plus size={10}/></button>
+                              <button onClick={() => removeFromCart(item.id)} className="ml-1 p-1 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={12}/></button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -658,16 +934,130 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
       {/* Visualização de Produto Individual */}
       {viewingProduct && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 flex flex-col sm:flex-row max-h-[90vh]">
-            <div className="w-full sm:w-1/2 bg-slate-100 relative h-64 sm:h-auto shrink-0">
-              {viewingProduct.images?.[0] ? <img src={viewingProduct.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageOff size={48}/></div>}
-              <button onClick={() => setViewingProduct(null)} className="absolute top-4 right-4 p-2 bg-slate-900/40 backdrop-blur-md text-white rounded-full sm:hidden transition-transform active:scale-90"><X size={24} /></button>
+          <div className="bg-white w-full max-w-5xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 flex flex-col sm:flex-row max-h-[90vh]">
+            {/* Seção de Imagens (Galeria) */}
+            <div className="w-full sm:w-1/2 bg-slate-100 relative h-[40vh] sm:h-auto shrink-0 flex flex-col">
+              <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-slate-50">
+                {viewingProduct.images && viewingProduct.images.length > 0 ? (
+                  <>
+                    <img 
+                      key={currentImageIndex}
+                      src={viewingProduct.images[currentImageIndex]} 
+                      className="w-full h-full object-cover animate-in fade-in duration-500" 
+                      alt={viewingProduct.name}
+                    />
+                    
+                    {viewingProduct.images.length > 1 && (
+                      <>
+                        <button 
+                          onClick={() => setCurrentImageIndex(prev => (prev === 0 ? viewingProduct.images!.length - 1 : prev - 1))}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/50 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-all active:scale-90"
+                        >
+                          <ChevronLeft size={24} />
+                        </button>
+                        <button 
+                          onClick={() => setCurrentImageIndex(prev => (prev + 1) % viewingProduct.images!.length)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/50 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-all active:scale-90"
+                        >
+                          <ChevronRight size={24} />
+                        </button>
+                        
+                        {/* Indicador de Imagem */}
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
+                          {viewingProduct.images.map((_, i) => (
+                            <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === currentImageIndex ? 'w-6 bg-white shadow-sm' : 'bg-white/40'}`} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageOff size={48}/></div>
+                )}
+                <button onClick={() => setViewingProduct(null)} className="absolute top-4 right-4 p-2 bg-slate-900/40 backdrop-blur-md text-white rounded-full sm:hidden transition-transform active:scale-90"><X size={24} /></button>
+              </div>
+
+              {/* Miniaturas (Thumbnails) no Modal */}
+              {viewingProduct.images && viewingProduct.images.length > 1 && (
+                <div className="bg-white p-3 border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
+                   {viewingProduct.images.map((img, i) => (
+                     <button 
+                       key={i} 
+                       onClick={() => setCurrentImageIndex(i)}
+                       className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all shrink-0 ${i === currentImageIndex ? 'border-indigo-600 scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                     >
+                       <img src={img} className="w-full h-full object-cover" alt="" />
+                     </button>
+                   ))}
+                </div>
+              )}
             </div>
+
             <div className="w-full sm:w-1/2 p-6 sm:p-10 flex flex-col overflow-y-auto">
               <div className="hidden sm:flex justify-end mb-4"><button onClick={() => setViewingProduct(null)} className="p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-slate-200 transition-all"><X size={20} /></button></div>
-              <div className="mb-6"><span className="text-[10px] font-black uppercase tracking-widest" style={{ color: primaryColor }}>{viewingProduct.category || 'Geral'}</span><h2 className="text-xl sm:text-2xl font-black text-slate-800 leading-tight mt-1">{viewingProduct.name}</h2></div>
-              <div className="flex-1 space-y-6"><div><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Sobre este item</h4><p className="text-slate-600 text-sm leading-relaxed">{viewingProduct.description || 'Sem descrição.'}</p></div></div>
-              <div className="mt-auto pt-6 border-t border-slate-100 flex flex-col gap-4"><div className="flex items-baseline justify-between"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Preço Unitário</p><span className="text-2xl sm:text-3xl font-black text-slate-900">R$ {viewingProduct.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div><button onClick={() => addToCart(viewingProduct, null)} className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 text-white hover:brightness-110" style={{ backgroundColor: primaryColor }}><Plus size={20}/> Adicionar ao Carrinho</button></div>
+              <div className="mb-6">
+                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: primaryColor }}>{viewingProduct.category || 'Geral'}</span>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800 leading-tight mt-1">{viewingProduct.name}</h2>
+              </div>
+              <div className="flex-1 space-y-8">
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Sobre este item</h4>
+                  <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{viewingProduct.description || 'Sem descrição.'}</p>
+                </div>
+
+                {/* Seletor de Subcategorias (Variações) */}
+                {(() => {
+                  const productSubs = getProductSubcategories(viewingProduct);
+                  if (productSubs.length === 0) return null;
+                  return (
+                    <div className="space-y-3">
+                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Layers size={14}/> Selecione uma Opção
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {productSubs.map(sub => (
+                          <button 
+                            key={sub.id}
+                            onClick={() => setSelectedSubForModal(sub)}
+                            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border-2 ${
+                              selectedSubForModal?.id === sub.id 
+                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+                                : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-indigo-200'
+                            }`}
+                          >
+                            {sub.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="mt-auto pt-6 border-t border-slate-100 flex flex-col gap-4">
+                <div className="flex items-baseline justify-between">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Preço Unitário</p>
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900">R$ {viewingProduct.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                {/* Validação de subcategoria antes de adicionar */}
+                {(() => {
+                  const hasSubs = getProductSubcategories(viewingProduct).length > 0;
+                  const canAdd = !hasSubs || selectedSubForModal;
+
+                  return (
+                    <button 
+                      onClick={() => addToCart(viewingProduct, selectedSubForModal)} 
+                      disabled={!canAdd}
+                      className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 text-white hover:brightness-110 disabled:opacity-50 disabled:grayscale disabled:active:scale-100`}
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      <ShoppingCart size={20}/> 
+                      {canAdd ? 'Adicionar ao Carrinho' : 'Escolha uma opção acima'}
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>
