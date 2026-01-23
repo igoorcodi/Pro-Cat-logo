@@ -37,12 +37,22 @@ export interface Promotion {
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   min_order_value: number;
-  max_discount_value: number; // Novo campo
-  usage_limit: number;        // Novo campo
-  usage_count: number;        // Novo campo
+  max_discount_value: number; 
+  usage_limit: number;        
+  usage_count: number;        
+  show_on_home: boolean;      
   expiry_date?: string;
   status: 'active' | 'inactive';
   created_at?: string;
+}
+
+/* Tracking of coupon usage by specific customers */
+export interface CustomerCouponUsage {
+  id: string | number;
+  user_id: string | number;
+  customer_id: string | number;
+  promotion_id: string | number;
+  used_at: string;
 }
 
 /* System User interface */
@@ -70,7 +80,7 @@ export interface StockHistoryEntry {
   reference_id?: string;
 }
 
-/* Main product interface with support for DB fields and app state mapping */
+/* Main product interface */
 export interface Product {
   id: string | number;
   user_id: string | number;
@@ -92,83 +102,14 @@ export interface Product {
   created_at?: string;
 }
 
-/* Subcategory definition */
-export interface Subcategory {
-  id: string | number;
-  name: string;
-  category_id: string | number;
-  user_id: string | number;
-  status: 'active' | 'inactive';
-}
-
-/* Category definition with optional nested subcategories */
-export interface Category {
-  id: string | number;
-  name: string;
-  user_id: string | number;
-  status: 'active' | 'inactive';
-  subcategories?: Subcategory[];
-}
-
-/* Catalog/Digital Vitrine configuration */
-export interface Catalog {
-  id: string | number;
-  user_id: string | number;
-  name: string;
-  slug: string;
-  description: string;
-  cover_image?: string;
-  coverImage?: string;
-  logo_url?: string;
-  logoUrl?: string;
-  primary_color?: string;
-  primaryColor?: string;
-  product_ids: (string | number)[];
-  productIds: (string | number)[];
-  createdAt?: string;
-  created_at?: string;
-  status: 'active' | 'inactive';
-}
-
-/* Item within a quotation/order */
-export interface QuotationItem {
-  productId: string | number;
-  name: string;
-  quantity: number;
-  price: number;
-  discount: number;
-}
-
-/* Quotation/Order management */
-export interface Quotation {
-  id: string | number;
-  user_id: string | number;
-  client_name?: string;
-  clientName?: string;
-  client_phone?: string;
-  clientPhone?: string;
-  seller_name?: string;
-  sellerName?: string;
-  quotation_date?: string;
-  quotationDate?: string;
-  keyword?: string;
-  items: QuotationItem[];
-  total: number;
-  status: QuotationStatus;
-  notes?: string;
-  payment_method_id?: string | number;
-  paymentMethodId?: string | number;
-  createdAt?: string;
-  created_at?: string;
-}
-
-/* Customer/Client management */
+/* Customer/Client management with password for showcase login */
 export interface Customer {
   id: string | number;
   user_id: string | number;
   name: string;
   email: string;
   phone: string;
+  password?: string; // Campo para login na vitrine
   document: string;
   zip_code?: string;
   zipCode?: string;
@@ -183,62 +124,14 @@ export interface Customer {
   created_at?: string;
 }
 
-/* Company/Business profile */
-export interface Company {
-  id?: string | number;
-  user_id: string | number;
-  name: string;
-  trading_name?: string;
-  document: string;
-  whatsapp: string;
-  instagram?: string;
-  email?: string;
-  zip_code?: string;
-  address?: string;
-  number?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  logo_url?: string;
-  status: 'active' | 'inactive';
-}
-
-/* Payment method configuration */
-export interface PaymentMethod {
-  id: string | number;
-  user_id: string | number;
-  name: string;
-  fee_percentage: number;
-  fixed_fee: number;
-  status: 'active' | 'inactive';
-}
-
-/* Message template for sharing */
-export interface MessageTemplate {
-  id: string;
-  name: string;
-  content: string;
-}
-
-/* Shopping cart item for public vitrine */
-export interface CartItem {
-  id: string;
-  productId: string | number;
-  productName: string;
-  price: number;
-  quantity: number;
-  image?: string;
-  selectedSub: Subcategory | null;
-}
-
-/* General system audit log */
-export interface AuditLog {
-  id: number | string;
-  user_id: number | string;
-  table_name: string;
-  record_id: number | string;
-  action: 'INSERT' | 'UPDATE' | 'DELETE';
-  old_data: any;
-  new_data: any;
-  created_at: string;
-}
+/* ... existing interfaces remain unchanged ... */
+export interface Category { id: string | number; name: string; user_id: string | number; status: 'active' | 'inactive'; subcategories?: Subcategory[]; }
+export interface Subcategory { id: string | number; name: string; category_id: string | number; user_id: string | number; status: 'active' | 'inactive'; }
+export interface Catalog { id: string | number; user_id: string | number; name: string; slug: string; description: string; cover_image?: string; coverImage?: string; logo_url?: string; logoUrl?: string; primary_color?: string; primaryColor?: string; product_ids: (string | number)[]; productIds: (string | number)[]; createdAt?: string; created_at?: string; status: 'active' | 'inactive'; }
+export interface QuotationItem { productId: string | number; name: string; quantity: number; price: number; discount: number; }
+export interface Quotation { id: string | number; user_id: string | number; client_name?: string; clientName?: string; client_phone?: string; clientPhone?: string; seller_name?: string; sellerName?: string; quotation_date?: string; quotationDate?: string; keyword?: string; items: QuotationItem[]; total: number; status: QuotationStatus; notes?: string; payment_method_id?: string | number; paymentMethodId?: string | number; createdAt?: string; created_at?: string; }
+export interface Company { id?: string | number; user_id: string | number; name: string; trading_name?: string; document: string; whatsapp: string; instagram?: string; email?: string; zip_code?: string; address?: string; number?: string; neighborhood?: string; city?: string; state?: string; logo_url?: string; status: 'active' | 'inactive'; }
+export interface PaymentMethod { id: string | number; user_id: string | number; name: string; fee_percentage: number; fixed_fee: number; status: 'active' | 'inactive'; }
+export interface MessageTemplate { id: string; name: string; content: string; }
+export interface CartItem { id: string; productId: string | number; productName: string; price: number; quantity: number; image?: string; selectedSub: Subcategory | null; }
+export interface AuditLog { id: number | string; user_id: number | string; table_name: string; record_id: number | string; action: 'INSERT' | 'UPDATE' | 'DELETE'; old_data: any; new_data: any; created_at: string; }

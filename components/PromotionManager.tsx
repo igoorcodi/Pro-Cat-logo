@@ -16,7 +16,9 @@ import {
   ChevronDown,
   Save,
   Users,
-  ShieldCheck
+  ShieldCheck,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Promotion } from '../types';
 
@@ -44,6 +46,7 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
       min_order_value: 0,
       max_discount_value: 0,
       usage_limit: 0,
+      show_on_home: false,
       status: 'active'
     });
     setIsFormOpen(true);
@@ -92,8 +95,11 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
                       <Ticket size={28} />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xl font-black text-slate-800 tracking-tight uppercase truncate">{promo.code}</h4>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xl font-black text-slate-800 tracking-tight uppercase truncate">{promo.code}</h4>
+                        {promo.show_on_home && <Eye size={14} className="text-indigo-500" title="Exibindo na vitrine" />}
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-1">
                         <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${promo.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                           {promo.status === 'active' ? 'Ativo' : 'Pausado'}
                         </span>
@@ -216,10 +222,21 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Status do Cupom</label>
-                <div className="flex gap-4">
-                  <button type="button" onClick={() => setEditingPromo({...editingPromo, status: 'active'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border-2 ${editingPromo.status === 'active' ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-white border-slate-100 text-slate-400'}`}>Ativo</button>
-                  <button type="button" onClick={() => setEditingPromo({...editingPromo, status: 'inactive'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border-2 ${editingPromo.status === 'inactive' ? 'bg-red-50 border-red-500 text-red-600' : 'bg-white border-slate-100 text-slate-400'}`}>Pausado</button>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Status e Visibilidade</label>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="flex gap-4">
+                    <button type="button" onClick={() => setEditingPromo({...editingPromo, status: 'active'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border-2 ${editingPromo.status === 'active' ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-white border-slate-100 text-slate-400'}`}>Ativo</button>
+                    <button type="button" onClick={() => setEditingPromo({...editingPromo, status: 'inactive'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border-2 ${editingPromo.status === 'inactive' ? 'bg-red-50 border-red-500 text-red-600' : 'bg-white border-slate-100 text-slate-400'}`}>Pausado</button>
+                  </div>
+                  
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingPromo({...editingPromo, show_on_home: !editingPromo.show_on_home})}
+                    className={`flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border-2 ${editingPromo.show_on_home ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-white border-slate-100 text-slate-400'}`}
+                  >
+                    {editingPromo.show_on_home ? <Eye size={18}/> : <EyeOff size={18}/>}
+                    {editingPromo.show_on_home ? 'Em destaque na Vitrine' : 'Oculto na Vitrine (Apenas Carrinho)'}
+                  </button>
                 </div>
               </div>
 
