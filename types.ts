@@ -1,7 +1,7 @@
 
 export type UserStatus = 'active' | 'inactive';
 export type ProductStatus = 'active' | 'inactive' | 'archived';
-export type PermissionLevel = 'none' | 'view' | 'edit' | 'admin';
+export type PermissionLevel = 'none' | 'view' | 'edit';
 export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered' | 'inactive';
 export type UserRole = 'admin' | 'editor' | 'viewer';
 export type CustomerStatus = 'active' | 'inactive';
@@ -28,6 +28,30 @@ export type AppView =
   | 'register'
   | 'onboarding';
 
+export interface UserPermissions {
+  products: PermissionLevel;
+  customers: PermissionLevel;
+  categories: PermissionLevel;
+  promotions: PermissionLevel;
+  catalogs: PermissionLevel;
+  quotations: PermissionLevel;
+}
+
+export interface User {
+  id: int8;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  photo?: string;
+  phone?: string;
+  owner_id: int8;
+  permissions: UserPermissions;
+}
+
+// Helper para int8 do postgres
+export type int8 = number;
+
 export interface Promotion {
   id: string | number;
   user_id: string | number;
@@ -50,20 +74,9 @@ export interface CustomerCouponUsage {
   customer_id: string | number;
   promotion_id: string | number;
   used_at: string;
-  promotion?: Promotion; // Carregado via join se necessário
+  promotion?: Promotion; 
 }
 
-export interface User {
-  id: string | number;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  photo?: string;
-  phone?: string;
-}
-
-// Added StockHistoryEntry to track stock movements
 export interface StockHistoryEntry {
   id: string;
   product_id: string;
@@ -96,7 +109,6 @@ export interface Product {
   category: string;
   createdAt?: string;
   created_at?: string;
-  // Added stock_history field
   stock_history?: StockHistoryEntry[];
 }
 
@@ -155,7 +167,6 @@ export interface Company { id?: string | number; user_id: string | number; name:
 export interface PaymentMethod { id: string | number; user_id: string | number; name: string; fee_percentage: number; fixed_fee: number; status: 'active' | 'inactive'; }
 export interface CartItem { id: string; productId: string | number; productName: string; price: number; quantity: number; image?: string; selectedSub: Subcategory | null; }
 
-// Added Quotation and related types
 export interface QuotationItem {
   productId: string | number;
   name: string;
@@ -181,7 +192,6 @@ export interface Quotation {
   paymentMethodId?: string | number;
 }
 
-// Added AuditLog for tracking changes
 export interface AuditLog {
   id: string | number;
   user_id: string | number;
@@ -193,7 +203,6 @@ export interface AuditLog {
   created_at: string;
 }
 
-// Added MessageTemplate for sharing
 export interface MessageTemplate {
   id: string;
   name: string;

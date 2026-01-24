@@ -230,7 +230,6 @@ const App: React.FC = () => {
             
             if (companyData) setCompany(companyData);
 
-            // Carregar promoções ativas para a vitrine
             const { data: promoData } = await supabase
               .from('promotions')
               .select('*')
@@ -304,26 +303,29 @@ const App: React.FC = () => {
     if (!user) return;
     setIsLoadingData(true);
     
+    // Todos os dados agora são filtrados pelo owner_id (vínculo com a empresa do admin)
+    const targetUserId = user.owner_id || user.id;
+
     try {
       const fetchCategories = async () => {
         try {
           const { data, error } = await supabase
             .from('categories')
             .select('*, subcategories(*)')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .eq('status', 'active');
           if (error) throw error;
           
           return (data || []).map(cat => ({
             ...cat,
-            subcategories: (cat.subcategories || []).filter((s: any) => s.status === 'active' && s.user_id === user.id)
+            subcategories: (cat.subcategories || []).filter((s: any) => s.status === 'active' && s.user_id === targetUserId)
           }));
         } catch (e) { return []; }
       };
 
       const fetchProducts = async (catData: any[]) => {
         try {
-          const { data, error } = await supabase.from('products').select('*').eq('user_id', user.id).eq('status', 'active').order('id', { ascending: false });
+          const { data, error } = await supabase.from('products').select('*').eq('user_id', targetUserId).eq('status', 'active').order('id', { ascending: false });
           if (error) throw error;
           if (data) {
             setProducts(data.map(p => ({ 
@@ -331,7 +333,7 @@ const App: React.FC = () => {
               categoryId: p.category_id, 
               subcategoryIds: p.subcategory_ids || [],
               subcategory_stock: p.subcategory_stock || {},
-              category: catData?.find(c => c.id === p.category_id && c.user_id === user.id)?.name || 'Sem Categoria', 
+              category: catData?.find(c => c.id === p.category_id && c.user_id === targetUserId)?.name || 'Sem Categoria', 
               createdAt: p.created_at 
             })));
           }
@@ -343,7 +345,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('catalogs')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .eq('status', 'active')
             .order('id', { ascending: false });
           if (error) throw error;
@@ -367,7 +369,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('quotations')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .neq('status', 'inactive')
             .order('id', { ascending: false });
           if (error) throw error;
@@ -385,7 +387,7 @@ const App: React.FC = () => {
 
       const fetchCustomers = async () => {
         try {
-          const { data, error } = await supabase.from('customers').select('*').eq('user_id', user.id).eq('status', 'active').order('id', { ascending: false });
+          const { data, error } = await supabase.from('customers').select('*').eq('user_id', targetUserId).eq('status', 'active').order('id', { ascending: false });
           if (error) throw error;
           if (data) setCustomers(data.map(c => ({ ...c, zipCode: c.zip_code, createdAt: c.created_at })));
         } catch (e) {}
@@ -396,7 +398,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('companies')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .eq('status', 'active')
             .maybeSingle();
           if (error) throw error;
@@ -409,7 +411,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('payment_methods')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .eq('status', 'active');
           if (error) throw error;
           if (data) setPaymentMethods(data);
@@ -421,7 +423,7 @@ const App: React.FC = () => {
           const { data, error } = await supabase
             .from('promotions')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('user_id', targetUserId)
             .order('id', { ascending: false });
           if (error) throw error;
           if (data) setPromotions(data);
@@ -477,18 +479,19 @@ const App: React.FC = () => {
 
   const handleSaveCustomer = async (customer: Partial<Customer>) => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const id = customer.id;
     const isActuallyNew = !id;
     const dataToSave: any = sanitizePayload({ 
       ...customer, 
-      user_id: user.id,
+      user_id: targetUserId,
       zip_code: customer.zipCode 
     }, isActuallyNew);
     delete dataToSave.zipCode;
 
     const { error } = isActuallyNew 
       ? await supabase.from('customers').insert(dataToSave)
-      : await supabase.from('customers').update(dataToSave).eq('id', id).eq('user_id', user.id);
+      : await supabase.from('customers').update(dataToSave).eq('id', id).eq('user_id', targetUserId);
 
     if (error) {
       alert("Erro ao salvar cliente: " + formatSupabaseError(error));
@@ -497,6 +500,7 @@ const App: React.FC = () => {
 
   const handleSaveProduct = async (product: Partial<Product>, stockNote?: string) => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const id = product.id;
     const isActuallyNew = !id || isCloning;
     
@@ -534,7 +538,7 @@ const App: React.FC = () => {
 
     const dataToSave: any = sanitizePayload({
       ...product,
-      user_id: user.id,
+      user_id: targetUserId,
       category_id: product.categoryId || null,
       subcategory_ids: product.subcategoryIds || [],
       subcategory_stock: product.subcategory_stock || {},
@@ -548,7 +552,7 @@ const App: React.FC = () => {
 
     const { data, error } = isActuallyNew 
       ? await supabase.from('products').insert(dataToSave).select()
-      : await supabase.from('products').update(dataToSave).eq('id', id).eq('user_id', user.id).select();
+      : await supabase.from('products').update(dataToSave).eq('id', id).eq('user_id', targetUserId).select();
 
     if (error) {
       console.error("Erro Supabase:", error);
@@ -556,7 +560,7 @@ const App: React.FC = () => {
     } else if (isActuallyNew && data?.[0]) {
       const realId = data[0].id;
       const updatedHistory = historyEntries.map(h => h.product_id === 'initial' ? { ...h, product_id: realId } : h);
-      await supabase.from('products').update({ stock_history: updatedHistory }).eq('id', realId).eq('user_id', user.id);
+      await supabase.from('products').update({ stock_history: updatedHistory }).eq('id', realId).eq('user_id', targetUserId);
       fetchData(); 
       setView('products');
     } else {
@@ -567,6 +571,7 @@ const App: React.FC = () => {
 
   const handleSaveBatchStock = async (updates: { id: string | number, newStock: number, notes?: string }[]) => {
     if (!user || !updates.length) return;
+    const targetUserId = user.owner_id || user.id;
     
     try {
       for (const update of updates) {
@@ -595,7 +600,7 @@ const App: React.FC = () => {
             stock_history: [...currentHistory, newEntry]
           })
           .eq('id', update.id)
-          .eq('user_id', user.id);
+          .eq('user_id', targetUserId);
         
         if (error) throw error;
       }
@@ -608,11 +613,12 @@ const App: React.FC = () => {
 
   const handleSaveCatalog = async (catalog: Partial<Catalog>) => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const id = catalog.id;
     const isActuallyNew = !id;
     const dataToSave: any = sanitizePayload({
       ...catalog,
-      user_id: user.id,
+      user_id: targetUserId,
       cover_image: catalog.coverImage,
       logo_url: catalog.logoUrl,
       primary_color: catalog.primaryColor,
@@ -633,7 +639,7 @@ const App: React.FC = () => {
 
     const { error } = isActuallyNew 
       ? await supabase.from('catalogs').insert(dataToSave)
-      : await supabase.from('catalogs').update(dataToSave).eq('id', id).eq('user_id', user.id);
+      : await supabase.from('catalogs').update(dataToSave).eq('id', id).eq('user_id', targetUserId);
 
     if (error) {
       alert("Erro ao salvar catálogo: " + formatSupabaseError(error));
@@ -642,18 +648,19 @@ const App: React.FC = () => {
 
   const handleSaveQuotation = async (quotation: Partial<Quotation>) => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const id = quotation.id;
     const isActuallyNew = !id;
     
     let previousStatus = '';
     if (!isActuallyNew) {
-      const { data: currentQ } = await supabase.from('quotations').select('status').eq('id', id).eq('user_id', user.id).maybeSingle();
+      const { data: currentQ } = await supabase.from('quotations').select('status').eq('id', id).eq('user_id', targetUserId).maybeSingle();
       previousStatus = currentQ?.status || '';
     }
 
     const dataToSave: any = sanitizePayload({
       ...quotation,
-      user_id: user.id,
+      user_id: targetUserId,
       client_name: quotation.clientName,
       client_phone: quotation.clientPhone,
       seller_name: quotation.sellerName,
@@ -668,7 +675,7 @@ const App: React.FC = () => {
 
     const { data: savedQuotation, error } = isActuallyNew 
       ? await supabase.from('quotations').insert(dataToSave).select()
-      : await supabase.from('quotations').update(dataToSave).eq('id', id).eq('user_id', user.id).select();
+      : await supabase.from('quotations').update(dataToSave).eq('id', id).eq('user_id', targetUserId).select();
 
     if (error) {
       alert('Erro ao salvar orçamento: ' + formatSupabaseError(error));
@@ -679,7 +686,7 @@ const App: React.FC = () => {
       try {
         if (quotation.items && quotation.items.length > 0) {
           for (const item of quotation.items) {
-            const { data: prod } = await supabase.from('products').select('*').eq('id', item.productId).eq('user_id', user.id).maybeSingle();
+            const { data: prod } = await supabase.from('products').select('*').eq('id', item.productId).eq('user_id', targetUserId).maybeSingle();
             if (prod) {
               const prevStockValue = prod.stock || 0;
               const newStockValue = Math.max(0, prevStockValue - (item.quantity || 0));
@@ -701,7 +708,7 @@ const App: React.FC = () => {
               await supabase.from('products').update({ 
                 stock: newStockValue,
                 stock_history: [...currentHistory, newEntry]
-              }).eq('id', item.productId).eq('user_id', user.id);
+              }).eq('id', item.productId).eq('user_id', targetUserId);
             }
           }
         }
@@ -716,13 +723,14 @@ const App: React.FC = () => {
 
   const handleSaveCompany = async (companyData: Partial<Company>) => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const dataToSave = sanitizePayload({ ...companyData }, false);
     
     const { error } = await supabase
       .from('companies')
       .upsert({
         ...dataToSave,
-        user_id: user.id
+        user_id: targetUserId
       }, { onConflict: 'user_id' });
       
     if (error) {
@@ -734,13 +742,14 @@ const App: React.FC = () => {
 
   const handleSavePromotion = async (promo: Partial<Promotion>) => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const id = promo.id;
     const isNew = !id;
-    const payload = sanitizePayload({ ...promo, user_id: user.id }, isNew);
+    const payload = sanitizePayload({ ...promo, user_id: targetUserId }, isNew);
 
     const { error } = isNew
       ? await supabase.from('promotions').insert(payload)
-      : await supabase.from('promotions').update(payload).eq('id', id).eq('user_id', user.id);
+      : await supabase.from('promotions').update(payload).eq('id', id).eq('user_id', targetUserId);
 
     if (error) alert("Erro ao salvar promoção: " + formatSupabaseError(error));
     else { fetchData(); navigateTo('promotions'); }
@@ -759,6 +768,7 @@ const App: React.FC = () => {
 
   const processDeletion = async () => {
     if (!user) return;
+    const targetUserId = user.owner_id || user.id;
     const { type, id } = deleteModal;
     setIsDeleting(true);
     try {
@@ -771,10 +781,9 @@ const App: React.FC = () => {
         case 'promotion': table = 'promotions'; break;
       }
 
-      // Se for promoção, apenas desativa o status (Soft Delete)
       const { error } = type === 'promotion'
-        ? await supabase.from(table).update({ status: 'inactive' }).eq('id', id).eq('user_id', user.id)
-        : await supabase.from(table).delete().eq('id', id).eq('user_id', user.id);
+        ? await supabase.from(table).update({ status: 'inactive' }).eq('id', id).eq('user_id', targetUserId)
+        : await supabase.from(table).delete().eq('id', id).eq('user_id', targetUserId);
 
       if (error) throw error;
       
@@ -786,6 +795,14 @@ const App: React.FC = () => {
     } finally { 
       setIsDeleting(false); 
     }
+  };
+
+  const checkPermission = (module: keyof User['permissions'], level: 'view' | 'edit' = 'view') => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    const userPerm = user.permissions?.[module];
+    if (level === 'edit') return userPerm === 'edit';
+    return userPerm === 'view' || userPerm === 'edit';
   };
 
   if (isInitializing) {
@@ -837,12 +854,12 @@ const App: React.FC = () => {
         </div>
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={view === 'dashboard'} onClick={() => navigateTo('dashboard')} />
-          <NavItem icon={<Users size={20} />} label="Clientes" active={view === 'customers'} onClick={() => navigateTo('customers')} />
-          <NavItem icon={<Package size={20} />} label="Produtos" active={view === 'products' || view === 'stock-adjustment'} onClick={() => navigateTo('products')} />
-          <NavItem icon={<Tags size={20} />} label="Categorias" active={view === 'categories'} onClick={() => navigateTo('categories')} />
-          <NavItem icon={<Ticket size={20} />} label="Promoções" active={view === 'promotions'} onClick={() => navigateTo('promotions')} />
-          <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />
-          <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />
+          {checkPermission('customers') && <NavItem icon={<Users size={20} />} label="Clientes" active={view === 'customers'} onClick={() => navigateTo('customers')} />}
+          {checkPermission('products') && <NavItem icon={<Package size={20} />} label="Produtos" active={view === 'products' || view === 'stock-adjustment'} onClick={() => navigateTo('products')} />}
+          {checkPermission('categories') && <NavItem icon={<Tags size={20} />} label="Categorias" active={view === 'categories'} onClick={() => navigateTo('categories')} />}
+          {checkPermission('promotions') && <NavItem icon={<Ticket size={20} />} label="Promoções" active={view === 'promotions'} onClick={() => navigateTo('promotions')} />}
+          {checkPermission('catalogs') && <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />}
+          {checkPermission('quotations') && <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />}
           <div className="pt-6 mt-6 border-t border-slate-800">
             <NavItem icon={<Settings size={20} />} label="Configurações" active={view === 'settings'} onClick={() => navigateTo('settings')} />
           </div>
@@ -866,7 +883,7 @@ const App: React.FC = () => {
             <h2 className="text-lg lg:text-xl font-black text-slate-800 tracking-tight">{viewTitles[view]}</h2>
           </div>
           <div className="flex items-center gap-3">
-            {['products'].includes(view) && (
+            {['products'].includes(view) && checkPermission('products', 'edit') && (
               <div className="flex items-center gap-2">
                 <button onClick={() => setView('stock-adjustment')} className="hidden sm:flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
                   <ListChecks size={18} /> Ajuste de Estoque
@@ -878,11 +895,13 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
-            {['customers', 'quotations'].includes(view) && (
-              <button onClick={() => {
-                if (view === 'customers') { setEditingCustomer(undefined); setView('customer-form'); }
-                else if (view === 'quotations') { setEditingQuotation(undefined); setView('quotation-form'); }
-              }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
+            {['customers'].includes(view) && checkPermission('customers', 'edit') && (
+              <button onClick={() => { setEditingCustomer(undefined); setView('customer-form'); }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
+                <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
+              </button>
+            )}
+            {['quotations'].includes(view) && checkPermission('quotations', 'edit') && (
+              <button onClick={() => { setEditingQuotation(undefined); setView('quotation-form'); }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
               </button>
             )}
@@ -890,14 +909,14 @@ const App: React.FC = () => {
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
           {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} quotations={quotations} />}
-          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { setEditingCustomer(c); setView('customer-form'); }} onDelete={(id, name) => openDeleteConfirmation('customer', id, name)} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
+          {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { if(checkPermission('customers', 'edit')) { setEditingCustomer(c); setView('customer-form'); } }} onDelete={(id, name) => openDeleteConfirmation('customer', id, name)} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
           {view === 'products' && (
             <ProductList 
               products={products} 
-              onEdit={(p) => { setEditingProduct(p); setIsCloning(false); setView('product-form'); }} 
+              onEdit={(p) => { if(checkPermission('products', 'edit')) { setEditingProduct(p); setIsCloning(false); setView('product-form'); } }} 
               onDelete={(id) => openDeleteConfirmation('product', id, 'Produto')} 
-              onDuplicate={(p) => { setEditingProduct(p); setIsCloning(true); setView('product-form'); }} 
+              onDuplicate={(p) => { if(checkPermission('products', 'edit')) { setEditingProduct(p); setIsCloning(true); setView('product-form'); } }} 
               onShowHistory={(p) => setViewingStockHistory(p)}
             />
           )}
@@ -915,7 +934,7 @@ const App: React.FC = () => {
           {view === 'categories' && user && <CategoryManager categories={categories} user={user} onRefresh={fetchData} />}
           {view === 'promotions' && <PromotionManager promotions={promotions} onSave={handleSavePromotion} onDelete={(id, name) => openDeleteConfirmation('promotion', id, name)} />}
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
-          {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { setEditingQuotation(q); setView('quotation-form'); }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
+          {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { if(checkPermission('quotations', 'edit')) { setEditingQuotation(q); setView('quotation-form'); } }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} paymentMethods={paymentMethods} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={() => handleLogoutRequest()} onRefresh={fetchData} company={company} onSaveCompany={handleSaveCompany} />}
         </div>
