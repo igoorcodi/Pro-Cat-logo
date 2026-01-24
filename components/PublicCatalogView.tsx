@@ -66,10 +66,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   
-  // Controle de Carrossel nos Cards
   const [cardImageIndexes, setCardImageIndexes] = useState<Record<string | number, number>>({});
   
-  // Autenticação do Cliente
   const [loggedCustomer, setLoggedCustomer] = useState<Customer | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<'login' | 'register' | 'profile'>('login');
@@ -80,11 +78,11 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Cupons
   const [couponInput, setCouponInput] = useState('');
   const [appliedPromotion, setAppliedPromotion] = useState<Promotion | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
+  const [isSendingOrder, setIsSendingOrder] = useState(false);
 
   const primaryColor = catalog?.primaryColor || '#4f46e5';
 
@@ -101,11 +99,10 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     }
   }, [catalog?.id]);
 
-  // Limpa seleção ao fechar modal
   useEffect(() => {
     if (!viewingProduct) {
       setSelectedSubForModal(null);
-      setCurrentImageIndex(0); // Reseta carrossel do modal
+      setCurrentImageIndex(0);
     }
   }, [viewingProduct]);
 
@@ -255,35 +252,69 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     const sellerPhone = (company?.whatsapp || seller?.phone || '').replace(/\D/g, '');
     if (!sellerPhone || cart.length === 0) return;
 
-    if (appliedPromotion && loggedCustomer && catalog?.user_id) {
-       await supabase.from('customer_coupon_usage').insert({
-          customer_id: loggedCustomer.id,
-          promotion_id: appliedPromotion.id,
-          user_id: catalog.user_id
-       });
+    setIsSendingOrder(true);
+
+    try {
+      // REGISTRO AUTOMÁTICO NA TABELA showcase_orders
+      // Somente se houver um cliente logado
+      if (loggedCustomer && catalog?.user_id) {
+        const { error: orderError } = await supabase
+          .from('showcase_orders')
+          .insert({
+            user_id: catalog.user_id,
+            customer_id: loggedCustomer.id,
+            client_name: loggedCustomer.name,
+            client_phone: loggedCustomer.phone,
+            items: cart,
+            total: cartTotal,
+            coupon_code: appliedPromotion?.code || null,
+            status: 'waiting'
+          });
+
+        if (orderError) {
+          console.error("Erro ao registrar pedido no sistema:", orderError);
+          // Opcional: alertar o cliente ou apenas prosseguir para o WhatsApp
+        }
+
+        if (appliedPromotion) {
+          await supabase.from('customer_coupon_usage').insert({
+              customer_id: loggedCustomer.id,
+              promotion_id: appliedPromotion.id,
+              user_id: catalog.user_id
+          });
+        }
+      }
+
+      // MONTAGEM DA MENSAGEM DO WHATSAPP
+      let message = `*NOVO PEDIDO - ${catalog?.name || 'VITRINE'}*\n`;
+      message += `*Cliente:* ${loggedCustomer?.name || 'Visitante'}\n`;
+      message += `----------------------------\n\n`;
+
+      cart.forEach((item, index) => {
+        message += `${index + 1}. *${item.productName}*\n`;
+        if (item.selectedSub) message += `   Opção: ${item.selectedSub.name}\n`;
+        message += `   Qtd: ${item.quantity} x R$ ${item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+        message += `   Subtotal: R$ ${(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
+      });
+
+      message += `----------------------------\n`;
+      message += `*Subtotal: R$ ${cartSubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
+      if (appliedPromotion) {
+        message += `*Cupom Aplicado: ${appliedPromotion.code}*\n`;
+        message += `*Desconto: -R$ ${discountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
+      }
+      message += `*TOTAL DO PEDIDO: R$ ${cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
+
+      const encoded = encodeURIComponent(message);
+      window.open(`https://wa.me/${sellerPhone}?text=${encoded}`, '_blank');
+      
+      // Limpar carrinho após sucesso? (Opcional, geralmente bom manter até o cliente confirmar no whats)
+      // setCart([]); 
+    } catch (err) {
+      console.error("Falha ao processar pedido:", err);
+    } finally {
+      setIsSendingOrder(false);
     }
-
-    let message = `*NOVO PEDIDO - ${catalog?.name || 'VITRINE'}*\n`;
-    message += `*Cliente:* ${loggedCustomer?.name || 'Visitante'}\n`;
-    message += `----------------------------\n\n`;
-
-    cart.forEach((item, index) => {
-      message += `${index + 1}. *${item.productName}*\n`;
-      if (item.selectedSub) message += `   Opção: ${item.selectedSub.name}\n`;
-      message += `   Qtd: ${item.quantity} x R$ ${item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
-      message += `   Subtotal: R$ ${(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
-    });
-
-    message += `----------------------------\n`;
-    message += `*Subtotal: R$ ${cartSubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
-    if (appliedPromotion) {
-      message += `*Cupom Aplicado: ${appliedPromotion.code}*\n`;
-      message += `*Desconto: -R$ ${discountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
-    }
-    message += `*TOTAL DO PEDIDO: R$ ${cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
-
-    const encoded = encodeURIComponent(message);
-    window.open(`https://wa.me/${sellerPhone}?text=${encoded}`, '_blank');
   };
 
   const addToCart = (product: Product, sub: Subcategory | null = null) => {
@@ -305,7 +336,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
   const handleCategoryChange = (cat: string) => { setSelectedCategoryName(cat); setSelectedSubcategoryId('Todas'); };
 
-  // Funções de Carrossel do Card
   const getCardActiveImage = (productId: string | number) => cardImageIndexes[productId] || 0;
   
   const handlePrevCardImage = (e: React.MouseEvent, product: Product) => {
@@ -326,7 +356,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     setCardImageIndexes(prev => ({ ...prev, [product.id]: next }));
   };
 
-  // Helper para buscar nomes das subcategorias
   const getProductSubcategories = (product: Product) => {
     const ids = product.subcategoryIds || product.subcategory_ids || [];
     if (ids.length === 0) return [];
@@ -392,7 +421,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-full text-xs focus:ring-2 outline-none" style={{ '--tw-ring-color': primaryColor + '40' } as React.CSSProperties} />
             </div>
 
-            {/* Login / Perfil do Cliente */}
             {loggedCustomer ? (
                <button 
                 onClick={() => { setAuthTab('profile'); setIsAuthModalOpen(true); }}
@@ -420,14 +448,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       </header>
 
-      {/* Capa com Visual Moderno e Textos Customizados */}
       <div className="shrink-0 relative h-96 sm:h-[32rem] lg:h-[60vh] overflow-hidden bg-slate-900">
         {catalog?.coverImage ? (
           <img src={catalog.coverImage} className="w-full h-full object-cover" alt="Capa" />
         ) : (
           <div className="w-full h-full bg-slate-800" />
         )}
-        {/* Overlay para destaque de texto */}
         <div className="absolute inset-0 bg-black/50 bg-gradient-to-t from-black/80 via-black/40 to-black/30 flex flex-col items-center justify-center text-center p-6 sm:p-12">
           <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
             {catalog?.coverTitle ? (
@@ -448,7 +474,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               <p className="text-white/90 text-xs sm:text-sm mt-2 max-w-md line-clamp-3 font-medium">{catalog?.description}</p>
             )}
             
-            {/* Scroll Indicator */}
             <div className="mt-12 animate-bounce opacity-50">
               <ChevronDown className="text-white" size={32} />
             </div>
@@ -456,7 +481,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       </div>
 
-      {/* Destaque de Cupons */}
       {!searchTerm && featuredPromotions.length > 0 && (
         <div className="shrink-0 bg-white border-b border-slate-100 py-6 overflow-hidden">
           <div className="max-w-7xl mx-auto px-4">
@@ -521,7 +545,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       )}
 
-      {/* Grid de Produtos */}
       <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-4 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 my-6 sm:my-8 mb-24 lg:mb-16">
         {isLoading ? (
           <div className="col-span-full py-20 flex justify-center"><Loader2 className="animate-spin" style={{ color: primaryColor }} size={32} /></div>
@@ -546,7 +569,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-300"><ImageOff size={32} /></div>
                   )}
                   
-                  {/* Navegação de Carrossel no Card */}
                   {hasMultipleImgs && (
                     <>
                       <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -564,7 +586,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                          </button>
                       </div>
                       
-                      {/* Pontos Indicadores no Card */}
                       <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
                         {imgs.map((_, i) => (
                           <div 
@@ -576,7 +597,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     </>
                   )}
 
-                  {/* Badge de Categoria no Mobile */}
                   <div className="absolute top-2 left-2 flex flex-wrap gap-1 sm:hidden">
                     <span className="bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full">
                       {product.category || 'Geral'}
@@ -630,13 +650,10 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         )}
       </main>
 
-      {/* Footer da Vitrine - Exibindo Identidade da Empresa */}
       {company && (
         <footer className="bg-white border-t border-slate-200 mt-auto py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
-              
-              {/* Coluna 1: Identidade */}
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   {displayLogoUrl ? (
@@ -660,7 +677,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 </p>
               </div>
 
-              {/* Coluna 2: Localização */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-slate-800">
                   <MapPin size={18} style={{ color: primaryColor }} />
@@ -673,7 +689,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 </div>
               </div>
 
-              {/* Coluna 3: Redes e Contato */}
               <div className="space-y-6">
                 <div className="flex items-center gap-2 text-slate-800">
                   <Globe size={18} style={{ color: primaryColor }} />
@@ -712,7 +727,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               </div>
             </div>
 
-            {/* Rodapé Legal */}
             <div className="pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-slate-400">
                 <ShieldCheck size={14} />
@@ -728,7 +742,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </footer>
       )}
 
-      {/* Auth & Perfil Modal */}
       {isAuthModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
@@ -840,7 +853,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         </div>
       )}
 
-      {/* Carrinho */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in" onClick={() => setIsCartOpen(false)} />
@@ -924,18 +936,24 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   {appliedPromotion && <div className="flex items-center justify-between text-emerald-400"><span className="text-[10px] font-black uppercase tracking-widest">Desconto</span><span className="text-sm font-bold">- R$ {discountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>}
                   <div className="pt-2 border-t border-white/10 flex items-center justify-between"><span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Total Geral</span><span className="text-3xl font-black" style={{ color: primaryColor }}>R$ {cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                 </div>
-                <button onClick={handleSendOrder} className="w-full py-5 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 hover:brightness-110" style={{ backgroundColor: primaryColor }}><MessageCircle size={20} /> Enviar Pedido</button>
+                <button 
+                  onClick={handleSendOrder} 
+                  disabled={isSendingOrder}
+                  className="w-full py-5 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 hover:brightness-110 disabled:opacity-70" 
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {isSendingOrder ? <Loader2 className="animate-spin" size={20} /> : <MessageCircle size={20} />} 
+                  {isSendingOrder ? 'Processando...' : 'Enviar Pedido'}
+                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Visualização de Produto Individual */}
       {viewingProduct && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-5xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 flex flex-col sm:flex-row max-h-[90vh]">
-            {/* Seção de Imagens (Galeria) */}
             <div className="w-full sm:w-1/2 bg-slate-100 relative h-[40vh] sm:h-auto shrink-0 flex flex-col">
               <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-slate-50">
                 {viewingProduct.images && viewingProduct.images.length > 0 ? (
@@ -962,7 +980,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                           <ChevronRight size={24} />
                         </button>
                         
-                        {/* Indicador de Imagem */}
                         <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
                           {viewingProduct.images.map((_, i) => (
                             <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === currentImageIndex ? 'w-6 bg-white shadow-sm' : 'bg-white/40'}`} />
@@ -977,7 +994,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 <button onClick={() => setViewingProduct(null)} className="absolute top-4 right-4 p-2 bg-slate-900/40 backdrop-blur-md text-white rounded-full sm:hidden transition-transform active:scale-90"><X size={24} /></button>
               </div>
 
-              {/* Miniaturas (Thumbnails) no Modal */}
               {viewingProduct.images && viewingProduct.images.length > 1 && (
                 <div className="bg-white p-3 border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
                    {viewingProduct.images.map((img, i) => (
@@ -1005,7 +1021,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{viewingProduct.description || 'Sem descrição.'}</p>
                 </div>
 
-                {/* Seletor de Subcategorias (Variações) */}
                 {(() => {
                   const productSubs = getProductSubcategories(viewingProduct);
                   if (productSubs.length === 0) return null;
@@ -1049,15 +1064,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   <span className="text-2xl sm:text-3xl font-black text-slate-900">R$ {viewingProduct.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
                 
-                {/* Validação de subcategoria antes de adicionar */}
                 {(() => {
                   const subcategories = getProductSubcategories(viewingProduct);
                   const hasSubs = subcategories.length > 0;
                   
-                  // Se tem variações, precisa selecionar uma
                   const canAdd = !hasSubs || (selectedSubForModal && (viewingProduct.subcategory_stock?.[String(selectedSubForModal.id)] ?? 0) > 0);
                   
-                  // Verificação global de estoque se não tiver variações
                   const isGlobalOutOfStock = !hasSubs && (viewingProduct.stock <= 0);
 
                   return (

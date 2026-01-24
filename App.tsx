@@ -19,10 +19,11 @@ import {
   Loader2,
   ListChecks,
   History,
-  Ticket
+  Ticket,
+  ShoppingCart
 } from 'lucide-react';
 import { supabase } from './supabase';
-import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry, PaymentMethod, Promotion } from './types';
+import { AppView, User, Product, Catalog, Category, Quotation, Customer, Company, StockHistoryEntry, PaymentMethod, Promotion, ShowcaseOrder } from './types';
 import Dashboard from './components/Dashboard';
 import ProductList from './components/ProductList';
 import ProductForm from './components/ProductForm';
@@ -41,6 +42,8 @@ import CustomerList from './components/CustomerList';
 import CustomerForm from './components/CustomerForm';
 import ConfirmationModal from './components/ConfirmationModal';
 import PromotionManager from './components/PromotionManager';
+import ShowcaseOrderList from './components/ShowcaseOrderList';
+import ShowcaseOrderForm from './components/ShowcaseOrderForm';
 
 const viewTitles: Record<string, string> = {
   'dashboard': 'Dashboard',
@@ -54,6 +57,8 @@ const viewTitles: Record<string, string> = {
   'help': 'Ajuda',
   'quotations': 'Orçamentos',
   'quotation-form': 'Novo Orçamento',
+  'showcase-orders': 'Pedidos Vitrine',
+  'showcase-order-form': 'Novo Pedido Vitrine',
   'public-catalog': 'Vitrine Digital',
   'customers': 'Clientes',
   'customer-form': 'Gerenciar Cliente',
@@ -88,6 +93,7 @@ const App: React.FC = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [showcaseOrders, setShowcaseOrders] = useState<ShowcaseOrder[]>([]);
   
   const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
   const [isCloning, setIsCloning] = useState(false);
@@ -105,7 +111,7 @@ const App: React.FC = () => {
 
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
-    type: 'product' | 'customer' | 'quotation' | 'catalog' | 'promotion';
+    type: 'product' | 'customer' | 'quotation' | 'catalog' | 'promotion' | 'showcase_order';
     id: number | string;
     title: string;
     message: string;
@@ -161,6 +167,7 @@ const App: React.FC = () => {
     setCompany(null);
     setPaymentMethods([]);
     setPromotions([]);
+    setShowcaseOrders([]);
     setSidebarOpen(false);
   }, []);
 
@@ -303,7 +310,6 @@ const App: React.FC = () => {
     if (!user) return;
     setIsLoadingData(true);
     
-    // Todos os dados agora são filtrados pelo owner_id (vínculo com a empresa do admin)
     const targetUserId = user.owner_id || user.id;
 
     try {
@@ -430,6 +436,18 @@ const App: React.FC = () => {
         } catch (e) {}
       };
 
+      const fetchShowcaseOrders = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('showcase_orders')
+            .select('*')
+            .eq('user_id', targetUserId)
+            .order('id', { ascending: false });
+          if (error) throw error;
+          if (data) setShowcaseOrders(data);
+        } catch (e) {}
+      };
+
       const categoriesData = await fetchCategories();
       setCategories(categoriesData);
       
@@ -440,7 +458,8 @@ const App: React.FC = () => {
         fetchCustomers(),
         fetchCompany(),
         fetchPaymentMethods(),
-        fetchPromotions()
+        fetchPromotions(),
+        fetchShowcaseOrders()
       ]);
 
     } catch (error) {
@@ -566,6 +585,77 @@ const App: React.FC = () => {
     } else {
       fetchData(); 
       setView('products');
+    }
+  };
+
+  const handleSaveShowcaseOrder = async (order: Partial<ShowcaseOrder>) => {
+    if (!user) return;
+    const targetUserId = user.owner_id || user.id;
+    const payload = sanitizePayload({ ...order, user_id: targetUserId }, !order.id);
+    
+    const { error } = order.id 
+      ? await supabase.from('showcase_orders').update(payload).eq('id', order.id).eq('user_id', targetUserId)
+      : await supabase.from('showcase_orders').insert(payload);
+
+    if (error) alert("Erro ao salvar pedido vitrine: " + formatSupabaseError(error));
+    else { fetchData(); setView('showcase-orders'); }
+  };
+
+  const handleCompleteShowcaseOrder = async (orderId: number | string) => {
+    if (!user) return;
+    const targetUserId = user.owner_id || user.id;
+    const order = showcaseOrders.find(o => o.id === orderId);
+    if (!order) return;
+
+    try {
+      // 1. Processar Baixa de Estoque
+      if (order.items && order.items.length > 0) {
+        for (const item of order.items) {
+          const { data: prod } = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', item.productId)
+            .eq('user_id', targetUserId)
+            .maybeSingle();
+          
+          if (prod) {
+            const prevStock = prod.stock || 0;
+            const newStock = Math.max(0, prevStock - item.quantity);
+            const entry: StockHistoryEntry = {
+              id: crypto.randomUUID(),
+              product_id: String(item.productId),
+              previous_stock: prevStock,
+              new_stock: newStock,
+              change_amount: -item.quantity,
+              reason: 'showcase_sale',
+              reference_id: `VIT-${order.id}`,
+              notes: `Venda vitrine para ${order.client_name}`,
+              created_at: new Date().toISOString(),
+              user_name: user.name
+            };
+
+            await supabase.from('products')
+              .update({ 
+                stock: newStock, 
+                stock_history: [...(prod.stock_history || []), entry] 
+              })
+              .eq('id', item.productId)
+              .eq('user_id', targetUserId);
+          }
+        }
+      }
+
+      // 2. Atualizar Status do Pedido
+      const { error } = await supabase
+        .from('showcase_orders')
+        .update({ status: 'completed' })
+        .eq('id', orderId)
+        .eq('user_id', targetUserId);
+      
+      if (error) throw error;
+      fetchData();
+    } catch (err) {
+      alert("Erro ao concluir pedido: " + formatSupabaseError(err));
     }
   };
 
@@ -755,7 +845,7 @@ const App: React.FC = () => {
     else { fetchData(); navigateTo('promotions'); }
   };
 
-  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation' | 'catalog' | 'promotion', id: number | string, name: string) => {
+  const openDeleteConfirmation = (type: 'product' | 'customer' | 'quotation' | 'catalog' | 'promotion' | 'showcase_order', id: number | string, name: string) => {
     setDeleteModal({ 
       isOpen: true, 
       type, 
@@ -779,6 +869,7 @@ const App: React.FC = () => {
         case 'quotation': table = 'quotations'; break;
         case 'catalog': table = 'catalogs'; break;
         case 'promotion': table = 'promotions'; break;
+        case 'showcase_order': table = 'showcase_orders'; break;
       }
 
       const { error } = type === 'promotion'
@@ -858,15 +949,21 @@ const App: React.FC = () => {
           {checkPermission('products') && <NavItem icon={<Package size={20} />} label="Produtos" active={view === 'products' || view === 'stock-adjustment'} onClick={() => navigateTo('products')} />}
           {checkPermission('categories') && <NavItem icon={<Tags size={20} />} label="Categorias" active={view === 'categories'} onClick={() => navigateTo('categories')} />}
           {checkPermission('promotions') && <NavItem icon={<Ticket size={20} />} label="Promoções" active={view === 'promotions'} onClick={() => navigateTo('promotions')} />}
-          {checkPermission('catalogs') && <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />}
-          {checkPermission('quotations') && <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />}
+          
+          <div className="pt-4 border-t border-slate-800/50 mt-4 mb-2">
+            <p className="px-4 py-2 text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">Canais de Venda</p>
+            {checkPermission('catalogs') && <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />}
+            <NavItem icon={<ShoppingCart size={20} />} label="Pedido Vitrine" active={view === 'showcase-orders'} onClick={() => navigateTo('showcase-orders')} />
+            {checkPermission('quotations') && <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />}
+          </div>
+
           <div className="pt-6 mt-6 border-t border-slate-800">
             <NavItem icon={<Settings size={20} />} label="Configurações" active={view === 'settings'} onClick={() => navigateTo('settings')} />
           </div>
         </nav>
         <div className="p-4 bg-slate-950/50">
           <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/50">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center"><UserIcon className="text-indigo-400" size={20} /></div>
+            <div className="w-10 h-10 rounded-xl bg-indigo-50/10 flex items-center justify-center"><UserIcon className="text-indigo-400" size={20} /></div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black text-white truncate uppercase tracking-widest">{user?.name}</p>
             </div>
@@ -905,6 +1002,11 @@ const App: React.FC = () => {
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Adicionar</span>
               </button>
             )}
+            {view === 'showcase-orders' && (
+              <button onClick={() => setView('showcase-order-form')} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
+                <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Novo Pedido Manual</span>
+              </button>
+            )}
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
@@ -936,6 +1038,8 @@ const App: React.FC = () => {
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { if(checkPermission('quotations', 'edit')) { setEditingQuotation(q); setView('quotation-form'); } }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} paymentMethods={paymentMethods} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
+          {view === 'showcase-orders' && <ShowcaseOrderList orders={showcaseOrders} onComplete={handleCompleteShowcaseOrder} onDelete={(id, name) => openDeleteConfirmation('showcase_order', id, name)} />}
+          {view === 'showcase-order-form' && <ShowcaseOrderForm products={products} customers={customers} onSave={handleSaveShowcaseOrder} onCancel={() => setView('showcase-orders')} />}
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={() => handleLogoutRequest()} onRefresh={fetchData} company={company} onSaveCompany={handleSaveCompany} />}
         </div>
       </main>

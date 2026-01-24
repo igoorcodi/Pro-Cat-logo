@@ -3,9 +3,10 @@ export type UserStatus = 'active' | 'inactive';
 export type ProductStatus = 'active' | 'inactive' | 'archived';
 export type PermissionLevel = 'none' | 'view' | 'edit';
 export type QuotationStatus = 'waiting' | 'in_progress' | 'finished' | 'delivered' | 'inactive';
+export type ShowcaseOrderStatus = 'waiting' | 'completed';
 export type UserRole = 'admin' | 'editor' | 'viewer';
 export type CustomerStatus = 'active' | 'inactive';
-export type StockChangeReason = 'manual_adjustment' | 'sale_delivery' | 'return' | 'initial_stock';
+export type StockChangeReason = 'manual_adjustment' | 'sale_delivery' | 'return' | 'initial_stock' | 'showcase_sale';
 
 export type AppView = 
   | 'dashboard'
@@ -23,6 +24,8 @@ export type AppView =
   | 'customers'
   | 'customer-form'
   | 'promotions'
+  | 'showcase-orders'
+  | 'showcase-order-form'
   | 'reset-password'
   | 'login'
   | 'register'
@@ -49,8 +52,21 @@ export interface User {
   permissions: UserPermissions;
 }
 
-// Helper para int8 do postgres
 export type int8 = number;
+
+export interface ShowcaseOrder {
+  id: int8;
+  user_id: int8;
+  customer_id?: int8;
+  client_name: string;
+  client_phone: string;
+  items: CartItem[];
+  total: number;
+  status: ShowcaseOrderStatus;
+  notes?: string;
+  coupon_code?: string;
+  created_at: string;
+}
 
 export interface Promotion {
   id: string | number;
