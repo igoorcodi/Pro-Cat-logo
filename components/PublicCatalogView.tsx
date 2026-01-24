@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Catalog, Product, Company, Category, Subcategory, CartItem, Promotion, Customer } from '../types';
+import { Catalog, Product, Company, Category, Subcategory, CartItem, Promotion, Customer, PaymentMethod } from '../types';
 import { 
   ShoppingCart, 
   MessageCircle, 
@@ -41,7 +41,8 @@ import {
   UserPlus,
   UserCircle,
   Layers,
-  ShieldCheck
+  ShieldCheck,
+  Wallet
 } from 'lucide-react';
 import { supabase } from '../supabase';
 
@@ -54,10 +55,11 @@ interface PublicCatalogViewProps {
   error?: string | null;
   categories?: Category[];
   promotions?: Promotion[];
+  paymentMethods?: PaymentMethod[];
   onBack?: () => void;
 }
 
-const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, seller, company, isLoading, error, categories = [], promotions = [], onBack }) => {
+const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products, seller, company, isLoading, error, categories = [], promotions = [], paymentMethods = [], onBack }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryName, setSelectedCategoryName] = useState<string>('Todos');
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | number>('Todas');
@@ -83,6 +85,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const [couponError, setCouponError] = useState<string | null>(null);
   const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
   const [isSendingOrder, setIsSendingOrder] = useState(false);
+  
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | number | ''>('');
 
   const primaryColor = catalog?.primaryColor || '#4f46e5';
 
@@ -251,14 +255,18 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
   const handleSendOrder = async () => {
     const sellerPhone = (company?.whatsapp || seller?.phone || '').replace(/\D/g, '');
     if (!sellerPhone || cart.length === 0) return;
+    
+    const paymentMethod = paymentMethods.find(pm => pm.id === selectedPaymentMethodId);
+    if (!paymentMethod && paymentMethods.length > 0) {
+      alert("Por favor, selecione uma forma de pagamento.");
+      return;
+    }
 
     setIsSendingOrder(true);
 
     try {
-      // REGISTRO AUTOMÁTICO NA TABELA showcase_orders
-      // Somente se houver um cliente logado
       if (loggedCustomer && catalog?.user_id) {
-        const { error: orderError } = await supabase
+        await supabase
           .from('showcase_orders')
           .insert({
             user_id: catalog.user_id,
@@ -268,13 +276,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             items: cart,
             total: cartTotal,
             coupon_code: appliedPromotion?.code || null,
+            payment_method_name: paymentMethod?.name || null,
             status: 'waiting'
           });
-
-        if (orderError) {
-          console.error("Erro ao registrar pedido no sistema:", orderError);
-          // Opcional: alertar o cliente ou apenas prosseguir para o WhatsApp
-        }
 
         if (appliedPromotion) {
           await supabase.from('customer_coupon_usage').insert({
@@ -285,7 +289,6 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         }
       }
 
-      // MONTAGEM DA MENSAGEM DO WHATSAPP
       let message = `*NOVO PEDIDO - ${catalog?.name || 'VITRINE'}*\n`;
       message += `*Cliente:* ${loggedCustomer?.name || 'Visitante'}\n`;
       message += `----------------------------\n\n`;
@@ -303,13 +306,14 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
         message += `*Cupom Aplicado: ${appliedPromotion.code}*\n`;
         message += `*Desconto: -R$ ${discountValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
       }
-      message += `*TOTAL DO PEDIDO: R$ ${cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
+      message += `*TOTAL DO PEDIDO: R$ ${cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n`;
+      if (paymentMethod) {
+        message += `*Forma de Pagamento:* ${paymentMethod.name}\n`;
+      }
+      message += `\n`;
 
       const encoded = encodeURIComponent(message);
       window.open(`https://wa.me/${sellerPhone}?text=${encoded}`, '_blank');
-      
-      // Limpar carrinho após sucesso? (Opcional, geralmente bom manter até o cliente confirmar no whats)
-      // setCart([]); 
     } catch (err) {
       console.error("Falha ao processar pedido:", err);
     } finally {
@@ -923,6 +927,28 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     )}
                     {couponError && <p className="text-[9px] font-bold text-red-500 flex items-center gap-1 px-1 animate-in shake"><AlertCircle size={10}/> {couponError}</p>}
                   </div>
+
+                  {paymentMethods.length > 0 && (
+                    <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
+                      <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                        <Wallet size={14} className="text-indigo-500" /> Forma de Pagamento
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {paymentMethods.map(pm => (
+                          <button 
+                            key={pm.id}
+                            onClick={() => setSelectedPaymentMethodId(pm.id)}
+                            className={`flex items-center justify-between p-3 rounded-2xl border-2 transition-all text-left ${selectedPaymentMethodId === pm.id ? 'bg-white border-indigo-500 shadow-md ring-2 ring-indigo-50' : 'bg-white border-transparent hover:border-slate-100'}`}
+                          >
+                            <span className={`text-xs font-black uppercase tracking-tight ${selectedPaymentMethodId === pm.id ? 'text-indigo-700' : 'text-slate-600'}`}>{pm.name}</span>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPaymentMethodId === pm.id ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-200'}`}>
+                              {selectedPaymentMethodId === pm.id && <Check size={12} strokeWidth={4} />}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40"><ShoppingCart size={64} className="text-slate-300" /><p className="font-black text-slate-800 uppercase tracking-widest text-sm">Carrinho Vazio</p></div>
@@ -938,12 +964,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 </div>
                 <button 
                   onClick={handleSendOrder} 
-                  disabled={isSendingOrder}
-                  className="w-full py-5 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 hover:brightness-110 disabled:opacity-70" 
+                  disabled={isSendingOrder || (paymentMethods.length > 0 && !selectedPaymentMethodId)}
+                  className="w-full py-5 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 hover:brightness-110 disabled:opacity-50 disabled:grayscale" 
                   style={{ backgroundColor: primaryColor }}
                 >
                   {isSendingOrder ? <Loader2 className="animate-spin" size={20} /> : <MessageCircle size={20} />} 
-                  {isSendingOrder ? 'Processando...' : 'Enviar Pedido'}
+                  {isSendingOrder ? 'Processando...' : (paymentMethods.length > 0 && !selectedPaymentMethodId ? 'Selecione o Pagamento' : 'Enviar Pedido')}
                 </button>
               </div>
             )}
@@ -1017,7 +1043,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               </div>
               <div className="flex-1 space-y-8">
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Sobre este item</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">About this item</h4>
                   <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{viewingProduct.description || 'Sem descrição.'}</p>
                 </div>
 

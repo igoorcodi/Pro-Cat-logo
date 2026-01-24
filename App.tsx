@@ -302,6 +302,15 @@ const App: React.FC = () => {
               .eq('status', 'active');
             
             if (promoData) setPromotions(promoData);
+
+            // BUSCA FORMAS DE PAGAMENTO DO VENDEDOR
+            const { data: payMethods } = await supabase
+              .from('payment_methods')
+              .select('*')
+              .eq('user_id', sellerData.id)
+              .eq('status', 'active');
+            
+            if (payMethods) setPaymentMethods(payMethods);
           }
 
           const productIds = catalogData.product_ids || [];
@@ -1032,6 +1041,7 @@ const App: React.FC = () => {
         error={publicCatalogError}
         categories={categories}
         promotions={promotions}
+        paymentMethods={paymentMethods}
         onBack={user ? () => {
           setView('catalogs');
           safeReplaceState('');

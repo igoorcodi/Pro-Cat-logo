@@ -65,6 +65,7 @@ export interface ShowcaseOrder {
   status: ShowcaseOrderStatus;
   notes?: string;
   coupon_code?: string;
+  payment_method_name?: string;
   created_at: string;
 }
 
