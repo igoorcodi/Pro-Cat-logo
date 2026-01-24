@@ -40,15 +40,14 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   if (!isOpen) return null;
 
   const isInfo = variant === 'info';
-  // Adicionado .trim() para robustez na comparação
   const isConfirmDisabled = requireTextInput 
     ? inputValue.trim() !== requireTextInput.trim() 
     : false;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-300">
       <div 
-        className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100"
+        className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100 relative"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-8 flex flex-col items-center text-center">

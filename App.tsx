@@ -124,7 +124,14 @@ const App: React.FC = () => {
     title: '',
     message: ''
   });
+  
+  const [revertModal, setRevertModal] = useState<{
+    isOpen: boolean;
+    orderId: number | string | null;
+  }>({ isOpen: false, orderId: null });
+
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
 
   // Contador de pedidos esperando
   const waitingOrdersCount = showcaseOrders.filter(o => o.status === 'waiting').length;
@@ -194,7 +201,6 @@ const App: React.FC = () => {
           if (payload.eventType === 'INSERT') {
             const newOrder = payload.new as ShowcaseOrder;
             setShowcaseOrders(prev => [newOrder, ...prev]);
-            // Opcional: tocar um som de notificação aqui
             if (Notification.permission === 'granted') {
               new Notification('Novo Pedido na Vitrine!', {
                 body: `Cliente: ${newOrder.client_name} - Total: R$ ${newOrder.total.toLocaleString('pt-BR')}`,
@@ -217,7 +223,6 @@ const App: React.FC = () => {
     };
   }, [user]);
 
-  // Request notification permission
   useEffect(() => {
     if ("Notification" in window && Notification.permission === 'default') {
       Notification.requestPermission();
@@ -661,7 +666,6 @@ const App: React.FC = () => {
     if (!order) return;
 
     try {
-      // 1. Processar Baixa de Estoque
       if (order.items && order.items.length > 0) {
         for (const item of order.items) {
           const { data: prod } = await supabase
@@ -698,7 +702,6 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. Atualizar Status do Pedido
       const { error } = await supabase
         .from('showcase_orders')
         .update({ status: 'completed' })
@@ -709,6 +712,67 @@ const App: React.FC = () => {
       fetchData();
     } catch (err) {
       alert("Erro ao concluir pedido: " + formatSupabaseError(err));
+    }
+  };
+
+  const handleRevertShowcaseOrder = async (orderId: number | string) => {
+    if (!user) return;
+    const targetUserId = user.owner_id || user.id;
+    const order = showcaseOrders.find(o => o.id === orderId);
+    if (!order) return;
+
+    setIsReverting(true);
+    try {
+      if (order.items && order.items.length > 0) {
+        for (const item of order.items) {
+          const { data: prod } = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', item.productId)
+            .eq('user_id', targetUserId)
+            .maybeSingle();
+          
+          if (prod) {
+            const prevStock = prod.stock || 0;
+            const newStock = prevStock + item.quantity;
+            const entry: StockHistoryEntry = {
+              id: crypto.randomUUID(),
+              product_id: String(item.productId),
+              previous_stock: prevStock,
+              new_stock: newStock,
+              change_amount: item.quantity,
+              reason: 'return',
+              reference_id: `REV-VIT-${order.id}`,
+              notes: `Estorno de pedido vitrine #${order.id} (${order.client_name})`,
+              created_at: new Date().toISOString(),
+              user_name: user.name
+            };
+
+            await supabase.from('products')
+              .update({ 
+                stock: newStock, 
+                stock_history: [...(prod.stock_history || []), entry] 
+              })
+              .eq('id', item.productId)
+              .eq('user_id', targetUserId);
+          }
+        }
+      }
+
+      // IMPORTANTE: Atualiza APENAS o status para garantir integridade total dos itens do pedido
+      const { error } = await supabase
+        .from('showcase_orders')
+        .update({ status: 'canceled' })
+        .eq('id', orderId)
+        .eq('user_id', targetUserId);
+      
+      if (error) throw error;
+      setRevertModal({ isOpen: false, orderId: null });
+      fetchData();
+    } catch (err) {
+      alert("Erro ao estornar pedido: " + formatSupabaseError(err));
+    } finally {
+      setIsReverting(false);
     }
   };
 
@@ -850,7 +914,7 @@ const App: React.FC = () => {
               
               await supabase.from('products').update({ 
                 stock: newStockValue,
-                stock_history: [...currentHistory, newEntry]
+                stock_history: [...(currentHistory || []), newEntry]
               }).eq('id', item.productId).eq('user_id', targetUserId);
             }
           }
@@ -1101,6 +1165,7 @@ const App: React.FC = () => {
             <ShowcaseOrderList 
               orders={showcaseOrders} 
               onComplete={handleCompleteShowcaseOrder} 
+              onRevert={(id) => setRevertModal({ isOpen: true, orderId: id })}
               onDelete={(id, name) => openDeleteConfirmation('showcase_order', id, name)} 
               onEdit={(order) => { setEditingShowcaseOrder(order); setView('showcase-order-form'); }}
             />
@@ -1133,6 +1198,7 @@ const App: React.FC = () => {
         />
       )}
       {isSharingCatalog && <ShareCatalogModal catalog={isSharingCatalog} onClose={() => setIsSharingCatalog(null)} />}
+      
       <ConfirmationModal 
         isOpen={deleteModal.isOpen} 
         title={deleteModal.title} 
@@ -1143,6 +1209,19 @@ const App: React.FC = () => {
         requireTextInput={deleteModal.requiredText}
         textInputPlaceholder="Digite o nome da vitrine para confirmar"
       />
+
+      <ConfirmationModal 
+        isOpen={revertModal.isOpen} 
+        title="Estornar Pedido" 
+        message="O pedido será estornado, as quantidades dos produtos retornarão automaticamente ao estoque e o valor da venda também será revertido em seu registro histórico." 
+        confirmLabel="Confirmar Estorno"
+        cancelLabel="Voltar"
+        onConfirm={() => revertModal.orderId && handleRevertShowcaseOrder(revertModal.orderId)} 
+        onCancel={() => setRevertModal({ isOpen: false, orderId: null })} 
+        isLoading={isReverting} 
+        variant="danger"
+      />
+
       <ConfirmationModal isOpen={isLogoutConfirmationOpen} title="Sair do Sistema" message="Deseja realmente encerrar sua sessão?" confirmLabel="Sair" cancelLabel="Voltar" onConfirm={triggerLogout} onCancel={() => setIsLogoutConfirmationOpen(false)} variant="info" />
     </div>
   );
