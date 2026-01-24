@@ -58,7 +58,7 @@ const viewTitles: Record<string, string> = {
   'quotations': 'Orçamentos',
   'quotation-form': 'Novo Orçamento',
   'showcase-orders': 'Pedidos Vitrine',
-  'showcase-order-form': 'Novo Pedido Vitrine',
+  'showcase-order-form': 'Gerenciar Pedido Vitrine',
   'public-catalog': 'Vitrine Digital',
   'customers': 'Clientes',
   'customer-form': 'Gerenciar Cliente',
@@ -100,6 +100,7 @@ const App: React.FC = () => {
   const [viewingStockHistory, setViewingStockHistory] = useState<Product | null>(null);
   const [editingQuotation, setEditingQuotation] = useState<Quotation | undefined>(undefined);
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
+  const [editingShowcaseOrder, setEditingShowcaseOrder] = useState<ShowcaseOrder | undefined>(undefined);
   const [editingCatalog, setEditingCatalog] = useState<Catalog | null | 'new'>(null);
   const [selectedCatalog, setSelectedCatalog] = useState<Catalog | null>(null);
   const [publicSeller, setPublicSeller] = useState<{ name: string; phone?: string } | null>(null);
@@ -124,6 +125,9 @@ const App: React.FC = () => {
     message: ''
   });
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Contador de pedidos esperando
+  const waitingOrdersCount = showcaseOrders.filter(o => o.status === 'waiting').length;
 
   const sanitizePayload = (payload: any, isNew: boolean = true) => {
     const cleaned = { ...payload };
@@ -169,6 +173,55 @@ const App: React.FC = () => {
     setPromotions([]);
     setShowcaseOrders([]);
     setSidebarOpen(false);
+  }, []);
+
+  // Realtime Subscription
+  useEffect(() => {
+    if (!user) return;
+    const targetUserId = user.owner_id || user.id;
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'showcase_orders',
+          filter: `user_id=eq.${targetUserId}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newOrder = payload.new as ShowcaseOrder;
+            setShowcaseOrders(prev => [newOrder, ...prev]);
+            // Opcional: tocar um som de notificação aqui
+            if (Notification.permission === 'granted') {
+              new Notification('Novo Pedido na Vitrine!', {
+                body: `Cliente: ${newOrder.client_name} - Total: R$ ${newOrder.total.toLocaleString('pt-BR')}`,
+                icon: '/favicon.ico'
+              });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as ShowcaseOrder;
+            setShowcaseOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = payload.old.id;
+            setShowcaseOrders(prev => prev.filter(o => o.id !== oldId));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Request notification permission
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, []);
 
   useEffect(() => {
@@ -953,7 +1006,13 @@ const App: React.FC = () => {
           <div className="pt-4 border-t border-slate-800/50 mt-4 mb-2">
             <p className="px-4 py-2 text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">Canais de Venda</p>
             {checkPermission('catalogs') && <NavItem icon={<BookOpen size={20} />} label="Catálogos" active={view === 'catalogs'} onClick={() => navigateTo('catalogs')} />}
-            <NavItem icon={<ShoppingCart size={20} />} label="Pedido Vitrine" active={view === 'showcase-orders'} onClick={() => navigateTo('showcase-orders')} />
+            <NavItem 
+              icon={<ShoppingCart size={20} />} 
+              label="Pedido Vitrine" 
+              active={view === 'showcase-orders'} 
+              onClick={() => navigateTo('showcase-orders')} 
+              badge={waitingOrdersCount}
+            />
             {checkPermission('quotations') && <NavItem icon={<FileText size={20} />} label="Orçamentos" active={view === 'quotations'} onClick={() => navigateTo('quotations')} />}
           </div>
 
@@ -1003,14 +1062,14 @@ const App: React.FC = () => {
               </button>
             )}
             {view === 'showcase-orders' && (
-              <button onClick={() => setView('showcase-order-form')} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
+              <button onClick={() => { setEditingShowcaseOrder(undefined); setView('showcase-order-form'); }} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 lg:px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-lg">
                 <Plus size={18} /><span className="hidden sm:inline uppercase tracking-widest text-[10px]">Novo Pedido Manual</span>
               </button>
             )}
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
-          {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} quotations={quotations} />}
+          {view === 'dashboard' && <Dashboard products={products} catalogs={catalogs} quotations={quotations} showcaseOrders={showcaseOrders} />}
           {view === 'customers' && <CustomerList customers={customers} onEdit={(c) => { if(checkPermission('customers', 'edit')) { setEditingCustomer(c); setView('customer-form'); } }} onDelete={(id, name) => openDeleteConfirmation('customer', id, name)} onAdd={() => { setEditingCustomer(undefined); setView('customer-form'); }} />}
           {view === 'customer-form' && <CustomerForm initialData={editingCustomer} onSave={handleSaveCustomer} onCancel={() => setView('customers')} />}
           {view === 'products' && (
@@ -1038,8 +1097,23 @@ const App: React.FC = () => {
           {view === 'catalogs' && <CatalogList catalogs={catalogs} products={products} onOpenPublic={handleOpenPublicCatalog} onEditCatalog={setEditingCatalog} onShareCatalog={setIsSharingCatalog} />}
           {view === 'quotations' && <QuotationList quotations={quotations} company={company} customers={customers} onEdit={(q) => { if(checkPermission('quotations', 'edit')) { setEditingQuotation(q); setView('quotation-form'); } }} onDelete={(id) => openDeleteConfirmation('quotation', id, 'Orçamento')} />}
           {view === 'quotation-form' && <QuotationForm initialData={editingQuotation} products={products} customers={customers} paymentMethods={paymentMethods} onSave={handleSaveQuotation} onCancel={() => setView('quotations')} />}
-          {view === 'showcase-orders' && <ShowcaseOrderList orders={showcaseOrders} onComplete={handleCompleteShowcaseOrder} onDelete={(id, name) => openDeleteConfirmation('showcase_order', id, name)} />}
-          {view === 'showcase-order-form' && <ShowcaseOrderForm products={products} customers={customers} onSave={handleSaveShowcaseOrder} onCancel={() => setView('showcase-orders')} />}
+          {view === 'showcase-orders' && (
+            <ShowcaseOrderList 
+              orders={showcaseOrders} 
+              onComplete={handleCompleteShowcaseOrder} 
+              onDelete={(id, name) => openDeleteConfirmation('showcase_order', id, name)} 
+              onEdit={(order) => { setEditingShowcaseOrder(order); setView('showcase-order-form'); }}
+            />
+          )}
+          {view === 'showcase-order-form' && (
+            <ShowcaseOrderForm 
+              initialData={editingShowcaseOrder}
+              products={products} 
+              customers={customers} 
+              onSave={handleSaveShowcaseOrder} 
+              onCancel={() => setView('showcase-orders')} 
+            />
+          )}
           {view === 'settings' && user && <SettingsView setProducts={setProducts} setCategories={setCategories} categories={categories} currentUser={user} onUpdateCurrentUser={setUser} systemUsers={systemUsers} setSystemUsers={setSystemUsers} onLogout={() => handleLogoutRequest()} onRefresh={fetchData} company={company} onSaveCompany={handleSaveCompany} />}
         </div>
       </main>
@@ -1074,9 +1148,17 @@ const App: React.FC = () => {
   );
 };
 
-const NavItem: React.FC<{ icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; }> = ({ icon, label, active, onClick }) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800/50 text-slate-400 hover:text-white'}`}>
-    {icon}<span className="font-black text-[10px] uppercase tracking-widest">{label}</span>
+const NavItem: React.FC<{ icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; badge?: number }> = ({ icon, label, active, onClick, badge }) => (
+  <button onClick={onClick} className={`w-full flex items-center justify-between gap-4 px-4 py-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800/50 text-slate-400 hover:text-white'}`}>
+    <div className="flex items-center gap-4">
+      {icon}
+      <span className="font-black text-[10px] uppercase tracking-widest">{label}</span>
+    </div>
+    {badge !== undefined && badge > 0 && (
+      <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse shadow-lg shadow-red-500/30">
+        {badge}
+      </span>
+    )}
   </button>
 );
 

@@ -19,14 +19,15 @@ import {
 import { Product, Customer, ShowcaseOrder, CartItem } from '../types';
 
 interface ShowcaseOrderFormProps {
+  initialData?: ShowcaseOrder;
   products: Product[];
   customers: Customer[];
   onSave: (order: Partial<ShowcaseOrder>) => void;
   onCancel: () => void;
 }
 
-const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ products, customers, onSave, onCancel }) => {
-  const [formData, setFormData] = useState<Partial<ShowcaseOrder>>({
+const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ initialData, products, customers, onSave, onCancel }) => {
+  const [formData, setFormData] = useState<Partial<ShowcaseOrder>>(initialData || {
     client_name: '',
     client_phone: '',
     status: 'waiting',
@@ -34,12 +35,10 @@ const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ products, custome
     total: 0
   });
 
-  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSearch, setCustomerSearch] = useState(initialData?.client_name || '');
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [showProductList, setShowProductList] = useState(false);
-
-  const customerListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const total = (formData.items || []).reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -58,7 +57,7 @@ const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ products, custome
 
   const addItem = (product: Product) => {
     const newItem: CartItem = {
-      id: `${product.id}_manual`,
+      id: `${product.id}_${Date.now()}`,
       productId: product.id,
       productName: product.name,
       price: product.price,
@@ -103,7 +102,9 @@ const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ products, custome
         <button onClick={onCancel} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-all">
           <ArrowLeft size={20} /> Voltar
         </button>
-        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Registro Manual de Pedido</h2>
+        <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+          {initialData ? `Editando Pedido #${initialData.id}` : 'Registro Manual de Pedido'}
+        </h2>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -189,8 +190,10 @@ const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ products, custome
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-8 bg-slate-900 rounded-[2.5rem] text-white">
            <div className="text-center sm:text-left">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Inicial</p>
-             <p className="text-sm font-black text-amber-400 uppercase">⏳ Aguardando Confirmação</p>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status do Pedido</p>
+             <p className={`text-sm font-black uppercase ${formData.status === 'completed' ? 'text-emerald-400' : 'text-amber-400'}`}>
+               {formData.status === 'completed' ? '✅ Pedido Concluído' : '⏳ Aguardando Confirmação'}
+             </p>
            </div>
            <div className="flex items-center gap-6">
              <div className="text-right">
@@ -198,7 +201,7 @@ const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ products, custome
                 <p className="text-3xl font-black text-indigo-400 tracking-tighter">R$ {formData.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
              </div>
              <button type="submit" className="flex items-center gap-3 px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 active:scale-95">
-                <Save size={20} /> Registrar Pedido
+                <Save size={20} /> {initialData ? 'Salvar Edições' : 'Registrar Pedido'}
              </button>
            </div>
         </div>

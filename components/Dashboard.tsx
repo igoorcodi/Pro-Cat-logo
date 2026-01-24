@@ -1,10 +1,9 @@
-
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, PieChart, Pie, Cell 
 } from 'recharts';
-import { Product, Catalog, Quotation } from '../types';
+import { Product, Catalog, Quotation, ShowcaseOrder } from '../types';
 import { 
   Package, 
   AlertCircle, 
@@ -18,19 +17,21 @@ import {
   ChevronRight,
   Check,
   DollarSign,
-  Layers
+  Layers,
+  ShoppingCart
 } from 'lucide-react';
 
 interface DashboardProps {
   products: Product[];
   catalogs: Catalog[];
   quotations: Quotation[];
+  showcaseOrders: ShowcaseOrder[];
 }
 
 type FilterType = 'today' | '7days' | '30days' | 'custom';
 type MetricType = 'totalItems' | 'totalValue';
 
-const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations }) => {
+const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations, showcaseOrders }) => {
   const [filterType, setFilterType] = useState<FilterType>('7days');
   const [activeMetric, setActiveMetric] = useState<MetricType>('totalValue');
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
@@ -38,28 +39,40 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
 
   const lowStock = products.filter(p => p.stock <= 10);
   const totalStockValue = products.reduce((sum, p) => sum + (p.price * p.stock), 0);
+  
+  // Vendas de todas as fontes (Orçamentos e Vitrine)
   const deliveredQuotations = quotations.filter(q => q.status === 'delivered');
+  const completedShowcaseOrders = showcaseOrders.filter(o => o.status === 'completed');
 
-  // Cálculo do Faturamento do Dia
+  // Cálculo do Faturamento do Dia (Unificado)
   const todayRevenue = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
-    return deliveredQuotations
+    const quotRevenue = deliveredQuotations
       .filter(q => {
         const qDate = new Date(q.createdAt || q.quotationDate);
         return qDate >= today && qDate < tomorrow;
       })
       .reduce((sum, q) => sum + (q.total || 0), 0);
-  }, [deliveredQuotations]);
+
+    const showcaseRevenue = completedShowcaseOrders
+      .filter(o => {
+        const oDate = new Date(o.created_at);
+        return oDate >= today && oDate < tomorrow;
+      })
+      .reduce((sum, o) => sum + (o.total || 0), 0);
+
+    return quotRevenue + showcaseRevenue;
+  }, [deliveredQuotations, completedShowcaseOrders]);
 
   // Calcula dinamicamente a distribuição por categoria
   const categoryDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
     products.forEach(p => {
-      counts[p.category] = (counts[p.category] || 0) + 1;
+      counts[p.category || 'Sem Categoria'] = (counts[p.category || 'Sem Categoria'] || 0) + 1;
     });
     
     const total = products.length || 1;
@@ -76,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
     return new Date(year, month - 1, day);
   };
 
-  // Histórico Dinâmico de Pedidos Entregues (Quantidade e Valor)
+  // Histórico Dinâmico Unificado (Quantidade e Valor)
   const chartData = useMemo(() => {
     const dataMap: Record<string, { totalItems: number, totalValue: number }> = {};
     let startDate = new Date();
@@ -123,6 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
       iterations++;
     }
 
+    // Processar Orçamentos
     deliveredQuotations.forEach(q => {
       const qDateStr = q.createdAt || q.quotationDate;
       if (!qDateStr) return;
@@ -130,17 +144,28 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
       if (qDate.getTime() >= startDate.getTime() && qDate.getTime() <= endDate.getTime()) {
         const dateStr = qDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         if (dataMap[dateStr] !== undefined) {
-          // Soma o total do orçamento
           dataMap[dateStr].totalValue += (q.total || 0);
-          // Soma a quantidade total de itens dentro do orçamento
           const itemsCount = q.items?.reduce((acc, item) => acc + (item.quantity || 0), 0) || 0;
           dataMap[dateStr].totalItems += itemsCount;
         }
       }
     });
 
+    // Processar Pedidos Vitrine
+    completedShowcaseOrders.forEach(o => {
+      const oDate = new Date(o.created_at);
+      if (oDate.getTime() >= startDate.getTime() && oDate.getTime() <= endDate.getTime()) {
+        const dateStr = oDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        if (dataMap[dateStr] !== undefined) {
+          dataMap[dateStr].totalValue += (o.total || 0);
+          const itemsCount = o.items?.reduce((acc, item) => acc + (item.quantity || 0), 0) || 0;
+          dataMap[dateStr].totalItems += itemsCount;
+        }
+      }
+    });
+
     return Object.entries(dataMap).map(([name, data]) => ({ name, ...data }));
-  }, [deliveredQuotations, filterType, customRange]);
+  }, [deliveredQuotations, completedShowcaseOrders, filterType, customRange]);
 
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -165,7 +190,7 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
           icon={<DollarSign className="text-emerald-600" />} 
           label="Faturamento Hoje" 
           value={`R$ ${todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
-          change="Receita bruta diária"
+          change="Vendas confirmadas hoje"
           color="emerald"
         />
         <StatCard 
@@ -190,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
         <div className="lg:col-span-2 bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <h3 className="font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight text-sm">
-              <TrendingUp size={18} className="text-indigo-600" /> Desempenho de Vendas
+              <TrendingUp size={18} className="text-indigo-600" /> Desempenho de Vendas Unificado
             </h3>
 
             {/* Seletor de Métrica */}
@@ -291,7 +316,7 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
                  <p className="text-slate-400 text-xs italic font-black uppercase tracking-widest text-center px-10">
                    {filterType === 'custom' && (!customRange.start || !customRange.end) 
                      ? "Selecione o período para visualizar o histórico" 
-                     : "Sem entregas registradas no período"}
+                     : "Sem vendas confirmadas no período"}
                  </p>
                </div>
              )}
@@ -328,10 +353,10 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
             )}
           </div>
           <div className="mt-4 space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
-            {categoryDistribution.map((entry, index) => (
+            {categoryDistribution.map(entry => (
               <div key={entry.name} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[categoryDistribution.indexOf(entry) % COLORS.length] }} />
                   <span className="text-slate-600 truncate max-w-[150px] font-bold text-xs uppercase tracking-tight">{entry.name}</span>
                 </div>
                 <span className="font-black text-xs">{entry.value}%</span>
@@ -341,224 +366,64 @@ const Dashboard: React.FC<DashboardProps> = ({ products, catalogs, quotations })
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Low Stock Table */}
-        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">Alertas de Estoque</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-slate-400 font-medium">
-                <tr>
-                  <th className="text-left py-3 font-black text-[10px] uppercase tracking-widest">Produto</th>
-                  <th className="text-right py-3 font-black text-[10px] uppercase tracking-widest">Estoque</th>
-                  <th className="text-right py-3 font-black text-[10px] uppercase tracking-widest">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {lowStock.length > 0 ? (
-                  lowStock.slice(0, 5).map(product => (
-                    <tr key={product.id}>
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          {product.images && product.images.length > 0 ? (
-                            <img src={product.images[0]} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300 border border-slate-100">
-                               <ImageOff size={14} />
-                            </div>
-                          )}
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-700 truncate max-w-[200px] text-xs uppercase">{product.name}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 text-right">
-                        <span className="font-black text-amber-600">{product.stock}</span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <span className="px-2 py-1 bg-amber-50 text-amber-600 text-[10px] rounded-lg font-black uppercase tracking-widest border border-amber-100">Repor</span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="py-8 text-center text-slate-400 italic font-bold uppercase text-[10px] tracking-widest">Sem alertas de estoque no momento</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Activity Feed */}
-        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-200">
-          <h3 className="font-black text-slate-800 mb-6 uppercase tracking-tight text-sm">Visão Geral</h3>
-          <div className="grid grid-cols-2 gap-4">
-             <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Catálogos</p>
-                <p className="text-2xl font-black text-indigo-700 tracking-tighter">{catalogs.length}</p>
-             </div>
-             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Entregas Totais</p>
-                <p className="text-2xl font-black text-emerald-700 tracking-tighter">{deliveredQuotations.length}</p>
-             </div>
-          </div>
-          <div className="flex flex-col items-center justify-center h-full py-10 opacity-20">
-            <TrendingUp size={48} className="mb-4" />
-            <p className="text-[10px] font-black text-center uppercase tracking-widest">Evolução contínua do negócio</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal de Calendário */}
       <CalendarModal 
         isOpen={isCalendarModalOpen} 
         onClose={() => setIsCalendarModalOpen(false)} 
-        onApply={handleApplyCustomRange}
-        initialStart={customRange.start}
-        initialEnd={customRange.end}
+        onApply={handleApplyCustomRange} 
       />
     </div>
   );
 };
 
-// Subcomponente de Modal de Calendário
-const CalendarModal: React.FC<{ 
-  isOpen: boolean; 
-  onClose: () => void; 
-  onApply: (start: string, end: string) => void;
-  initialStart: string;
-  initialEnd: string;
-}> = ({ isOpen, onClose, onApply, initialStart, initialEnd }) => {
-  const [startDate, setStartDate] = useState(initialStart);
-  const [endDate, setEndDate] = useState(initialEnd);
-  const [viewDate, setViewDate] = useState(new Date());
+/* Componentes Auxiliares */
 
-  if (!isOpen) return null;
-
-  const handleDayClick = (dateStr: string) => {
-    if (!startDate || (startDate && endDate)) {
-      setStartDate(dateStr);
-      setEndDate('');
-    } else {
-      const start = new Date(startDate);
-      const end = new Date(dateStr);
-      if (end < start) {
-        setStartDate(dateStr);
-        setEndDate(startDate);
-      } else {
-        setEndDate(dateStr);
-      }
-    }
-  };
-
-  const getDaysInMonth = (year: number, month: number) => {
-    const date = new Date(year, month, 1);
-    const days = [];
-    while (date.getMonth() === month) {
-      days.push(new Date(date));
-      date.setDate(date.getDate() + 1);
-    }
-    return days;
-  };
-
-  const currentYear = viewDate.getFullYear();
-  const currentMonth = viewDate.getMonth();
-  const days = getDaysInMonth(currentYear, currentMonth);
-  const monthName = viewDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-
-  const formatDate = (date: Date) => {
-    const d = new Date(date);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
+// Fixed: Defined missing StatCard component
+const StatCard: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  change: string;
+  color: 'indigo' | 'emerald' | 'amber' | 'blue';
+  isWarning?: boolean;
+}> = ({ icon, label, value, change, color, isWarning }) => {
+  const colors = {
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+    blue: 'bg-blue-50 text-blue-600 border-blue-100',
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-100 flex flex-col">
-        <div className="p-6 bg-indigo-600 text-white flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Calendar size={20} />
-            <h3 className="font-black text-sm uppercase tracking-widest">Selecionar Período</h3>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X size={20} /></button>
+    <div className={`bg-white p-6 rounded-[2rem] border-2 transition-all hover:shadow-xl ${isWarning ? 'border-amber-100' : 'border-slate-50'}`}>
+      <div className="flex items-center gap-4 mb-4">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${colors[color]}`}>
+          {icon}
         </div>
-
-        <div className="p-6 space-y-6">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setViewDate(new Date(currentYear, currentMonth - 1, 1))} className="p-2 hover:bg-slate-100 rounded-xl"><ChevronLeft size={20} /></button>
-            <span className="font-black text-xs uppercase tracking-widest text-slate-800">{monthName}</span>
-            <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))} className="p-2 hover:bg-slate-100 rounded-xl"><ChevronRight size={20} /></button>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 text-center mb-2">
-            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => (
-              <span key={d} className="text-[10px] font-black text-slate-400">{d}</span>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1">
-            {Array(days[0].getDay()).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
-            {days.map(day => {
-              const dStr = formatDate(day);
-              const isStart = dStr === startDate;
-              const isEnd = dStr === endDate;
-              const isInRange = startDate && endDate && dStr > startDate && dStr < endDate;
-              
-              return (
-                <button 
-                  key={dStr}
-                  onClick={() => handleDayClick(dStr)}
-                  className={`aspect-square flex items-center justify-center text-[10px] font-bold rounded-lg transition-all ${
-                    isStart || isEnd 
-                      ? 'bg-indigo-600 text-white shadow-md' 
-                      : isInRange 
-                        ? 'bg-indigo-50 text-indigo-600' 
-                        : 'hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Início</p>
-                <p className="text-xs font-bold text-slate-800">{startDate ? new Date(startDate).toLocaleDateString('pt-BR') : '---'}</p>
-              </div>
-              <ChevronRight size={16} className="text-slate-300" />
-              <div className="space-y-1 text-right">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fim</p>
-                <p className="text-xs font-bold text-slate-800">{endDate ? new Date(endDate).toLocaleDateString('pt-BR') : '---'}</p>
-              </div>
-            </div>
-
-            <button 
-              disabled={!startDate || !endDate}
-              onClick={() => onApply(startDate, endDate)}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
-            >
-              <Check size={18} /> Aplicar Filtro
-            </button>
-          </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{label}</p>
+          <p className="text-xl font-black text-slate-800 tracking-tight">{value}</p>
         </div>
+      </div>
+      <div className="pt-3 border-t border-slate-50">
+        <p className={`text-[10px] font-black uppercase tracking-widest ${isWarning ? 'text-amber-500' : 'text-slate-400'}`}>
+          {change}
+        </p>
       </div>
     </div>
   );
 };
 
-const FilterChip: React.FC<{ active: boolean, onClick: () => void, label: string, icon?: React.ReactNode }> = ({ active, onClick, label, icon }) => (
-  <button 
+// Fixed: Defined missing FilterChip component
+const FilterChip: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon?: React.ReactNode;
+}> = ({ active, onClick, label, icon }) => (
+  <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-      active 
-        ? 'bg-white text-indigo-600 shadow-sm' 
-        : 'text-slate-400 hover:text-slate-600'
+    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+      active ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
     }`}
   >
     {icon}
@@ -566,31 +431,47 @@ const FilterChip: React.FC<{ active: boolean, onClick: () => void, label: string
   </button>
 );
 
-const StatCard: React.FC<{ 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string; 
-  change: string; 
-  color: string;
-  isWarning?: boolean;
-}> = ({ icon, label, value, change, color, isWarning }) => (
-  <div className={`bg-white p-6 rounded-[2rem] shadow-sm border ${isWarning ? 'border-amber-200 bg-amber-50/10' : 'border-slate-100'} transition-all hover:shadow-xl group`}>
-    <div className="flex justify-between items-start mb-4">
-      <div className={`p-3 rounded-2xl bg-slate-50 group-hover:scale-110 group-hover:bg-white transition-all shadow-sm`}>
-        {icon}
-      </div>
-    </div>
-    <div className="space-y-1">
-      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</h4>
-      <p className="text-2xl font-black text-slate-800 tracking-tighter">{value}</p>
-      <div className="flex items-center gap-1">
-        <div className={`w-1 h-1 rounded-full ${isWarning ? 'bg-amber-500' : 'bg-indigo-500'}`} />
-        <p className={`text-[9px] font-black uppercase tracking-widest ${isWarning ? 'text-amber-600' : 'text-slate-400'}`}>
-          {change}
-        </p>
-      </div>
-    </div>
-  </div>
-);
+// Fixed: Defined missing CalendarModal component
+interface CalendarModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onApply: (start: string, end: string) => void;
+}
 
+const CalendarModal: React.FC<CalendarModalProps> = ({ isOpen, onClose, onApply }) => {
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden p-8 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Período Personalizado</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1"><X size={24} /></button>
+        </div>
+        <div className="space-y-4 mb-8">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Data Inicial</label>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-50" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Data Final</label>
+            <input type="date" value={end} onChange={e => setEnd(e.target.value)} className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-50" />
+          </div>
+        </div>
+        <button 
+          onClick={() => onApply(start, end)}
+          disabled={!start || !end}
+          className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 transition-all hover:bg-indigo-700 disabled:opacity-50"
+        >
+          Aplicar Filtro
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Fixed: Added default export
 export default Dashboard;

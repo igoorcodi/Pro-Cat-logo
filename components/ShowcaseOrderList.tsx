@@ -13,9 +13,10 @@ import {
   Info,
   Layers,
   X,
-  // Fix: Added missing icon imports
   Ticket,
-  ShoppingCart
+  ShoppingCart,
+  Edit2,
+  Eye
 } from 'lucide-react';
 import { ShowcaseOrder } from '../types';
 
@@ -23,9 +24,10 @@ interface ShowcaseOrderListProps {
   orders: ShowcaseOrder[];
   onComplete: (id: number | string) => Promise<void>;
   onDelete: (id: number | string, name: string) => void;
+  onEdit: (order: ShowcaseOrder) => void;
 }
 
-const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplete, onDelete }) => {
+const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplete, onDelete, onEdit }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'completed'>('all');
   const [viewingItems, setViewingItems] = useState<ShowcaseOrder | null>(null);
@@ -101,10 +103,11 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
                 </div>
                 
                 <div className="flex flex-col items-center sm:items-start">
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Itens</p>
-                   <button onClick={() => setViewingItems(order)} className="text-xs font-black text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl hover:bg-slate-200 transition-all flex items-center gap-2">
-                     <Layers size={14} /> {order.items?.reduce((acc, i) => acc + i.quantity, 0)} un.
-                   </button>
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ações Rápidas</p>
+                   <div className="flex items-center gap-2">
+                      <button onClick={() => setViewingItems(order)} title="Ver Itens" className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all"><Eye size={18} /></button>
+                      {order.status === 'waiting' && <button onClick={() => onEdit(order)} title="Editar Pedido" className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-all"><Edit2 size={18} /></button>}
+                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">
@@ -135,7 +138,7 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
         {filteredOrders.length === 0 && (
           <div className="py-32 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
              <ShoppingCart size={48} className="mx-auto mb-4 text-slate-300 opacity-40" />
-             <p className="font-black text-slate-400 uppercase tracking-widest text-sm">Nenhum pedido encontrado no período</p>
+             <p className="font-black text-slate-400 uppercase tracking-widest text-sm">Nenhum pedido encontrado</p>
           </div>
         )}
       </div>
@@ -176,7 +179,12 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor do Pedido</span>
                  <span className="text-xl font-black text-slate-900">R$ {viewingItems.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                </div>
-               <button onClick={() => setViewingItems(null)} className="w-full mt-6 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-200 transition-all">Fechar</button>
+               <div className="grid grid-cols-2 gap-3 mt-6">
+                 <button onClick={() => { setViewingItems(null); onEdit(viewingItems); }} className="py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
+                    <Edit2 size={14} /> Editar
+                 </button>
+                 <button onClick={() => setViewingItems(null)} className="py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-200 transition-all">Fechar</button>
+               </div>
             </div>
           </div>
         </div>
