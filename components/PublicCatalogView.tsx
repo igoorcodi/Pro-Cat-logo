@@ -252,12 +252,16 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
     if (code) setIsCartOpen(true);
   };
 
+  const visiblePaymentMethods = useMemo(() => {
+    return paymentMethods.filter(pm => pm.show_in_cart !== false && pm.status === 'active');
+  }, [paymentMethods]);
+
   const handleSendOrder = async () => {
     const sellerPhone = (company?.whatsapp || seller?.phone || '').replace(/\D/g, '');
     if (!sellerPhone || cart.length === 0) return;
     
-    const paymentMethod = paymentMethods.find(pm => pm.id === selectedPaymentMethodId);
-    if (!paymentMethod && paymentMethods.length > 0) {
+    const paymentMethod = visiblePaymentMethods.find(pm => pm.id === selectedPaymentMethodId);
+    if (!paymentMethod && visiblePaymentMethods.length > 0) {
       alert("Por favor, selecione uma forma de pagamento.");
       return;
     }
@@ -618,8 +622,11 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     </>
                   )}
 
-                  <div className="absolute top-2 left-2 flex flex-wrap gap-1 sm:hidden">
-                    <span className="bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full">
+                  <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                    {product.stock <= 0 && productSubs.length === 0 && (
+                       <span className="bg-red-600 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg shadow-lg animate-pulse">Esgotado</span>
+                    )}
+                    <span className="bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full sm:hidden">
                       {product.category || 'Geral'}
                     </span>
                   </div>
@@ -655,8 +662,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                        <span className="truncate">Ver Detalhes</span>
                      </button>
                      <button 
+                       disabled={product.stock <= 0 && productSubs.length === 0}
                        onClick={(e) => { e.stopPropagation(); addToCart(product); }} 
-                       className="p-2 sm:p-3 rounded-xl sm:rounded-2xl text-white shadow-lg active:scale-90 transition-all hover:brightness-110 flex items-center justify-center shrink-0"
+                       className="p-2 sm:p-3 rounded-xl sm:rounded-2xl text-white shadow-lg active:scale-90 transition-all hover:brightness-110 flex items-center justify-center shrink-0 disabled:opacity-50 disabled:grayscale"
                        style={{ backgroundColor: primaryColor }}
                      >
                        <ShoppingCart size={16} className="sm:size-[18px]" />
@@ -945,13 +953,13 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                     {couponError && <p className="text-[9px] font-bold text-red-500 flex items-center gap-1 px-1 animate-in shake"><AlertCircle size={10}/> {couponError}</p>}
                   </div>
 
-                  {paymentMethods.length > 0 && (
+                  {visiblePaymentMethods.length > 0 && (
                     <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
                       <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
                         <Wallet size={14} className="text-indigo-500" /> Forma de Pagamento
                       </div>
                       <div className="grid grid-cols-1 gap-2">
-                        {paymentMethods.map(pm => (
+                        {visiblePaymentMethods.map(pm => (
                           <button 
                             key={pm.id}
                             onClick={() => setSelectedPaymentMethodId(pm.id)}
@@ -981,12 +989,12 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                 </div>
                 <button 
                   onClick={handleSendOrder} 
-                  disabled={isSendingOrder || (paymentMethods.length > 0 && !selectedPaymentMethodId)}
+                  disabled={isSendingOrder || (visiblePaymentMethods.length > 0 && !selectedPaymentMethodId)}
                   className="w-full py-5 text-white rounded-2xl font-black uppercase text-sm tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 hover:brightness-110 disabled:opacity-50 disabled:grayscale" 
                   style={{ backgroundColor: primaryColor }}
                 >
                   {isSendingOrder ? <Loader2 className="animate-spin" size={20} /> : <MessageCircle size={20} />} 
-                  {isSendingOrder ? 'Processando...' : (paymentMethods.length > 0 && !selectedPaymentMethodId ? 'Selecione o Pagamento' : 'Enviar Pedido')}
+                  {isSendingOrder ? 'Processando...' : (visiblePaymentMethods.length > 0 && !selectedPaymentMethodId ? 'Selecione o Pagamento' : 'Enviar Pedido')}
                 </button>
               </div>
             )}
@@ -1060,7 +1068,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               </div>
               <div className="flex-1 space-y-8">
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">About this item</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Sobre este item</h4>
                   <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{viewingProduct.description || 'Sem descrição.'}</p>
                 </div>
 
@@ -1070,7 +1078,7 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   return (
                     <div className="space-y-3">
                       <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-                        <Layers size={14}/> Selecione uma Opção
+                        <Layers size={14}/> Selecione uma Opção (Obrigatório)
                       </h4>
                       <div className="flex flex-wrap gap-2">
                         {productSubs.map(sub => {
@@ -1111,19 +1119,25 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
                   const subcategories = getProductSubcategories(viewingProduct);
                   const hasSubs = subcategories.length > 0;
                   
-                  const canAdd = !hasSubs || (selectedSubForModal && (viewingProduct.subcategory_stock?.[String(selectedSubForModal.id)] ?? 0) > 0);
+                  const canAdd = hasSubs 
+                    ? (selectedSubForModal && (viewingProduct.subcategory_stock?.[String(selectedSubForModal.id)] ?? 0) > 0)
+                    : (viewingProduct.stock > 0);
                   
                   const isGlobalOutOfStock = !hasSubs && (viewingProduct.stock <= 0);
 
                   return (
                     <button 
                       onClick={() => addToCart(viewingProduct, selectedSubForModal)} 
-                      disabled={!canAdd || isGlobalOutOfStock}
+                      disabled={!canAdd}
                       className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 text-white hover:brightness-110 disabled:opacity-50 disabled:grayscale disabled:active:scale-100`}
                       style={{ backgroundColor: isGlobalOutOfStock ? '#94a3b8' : primaryColor }}
                     >
                       <ShoppingCart size={20}/> 
-                      {isGlobalOutOfStock ? 'Produto Esgotado' : (canAdd ? 'Adicionar ao Carrinho' : 'Escolha uma opção disponível')}
+                      {isGlobalOutOfStock 
+                        ? 'Produto Esgotado' 
+                        : (hasSubs && !selectedSubForModal 
+                            ? 'Escolha uma Opção' 
+                            : (canAdd ? 'Adicionar ao Carrinho' : 'Variação Esgotada'))}
                     </button>
                   );
                 })()}

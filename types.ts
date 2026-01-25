@@ -181,7 +181,7 @@ export interface Customer {
 }
 
 export interface Company { id?: string | number; user_id: string | number; name: string; trading_name?: string; document: string; whatsapp: string; instagram?: string; email?: string; zip_code?: string; address?: string; number?: string; neighborhood?: string; city?: string; state?: string; logo_url?: string; status: 'active' | 'inactive'; }
-export interface PaymentMethod { id: string | number; user_id: string | number; name: string; fee_percentage: number; fixed_fee: number; status: 'active' | 'inactive'; }
+export interface PaymentMethod { id: string | number; user_id: string | number; name: string; fee_percentage: number; fixed_fee: number; status: 'active' | 'inactive'; show_in_cart: boolean; }
 export interface CartItem { id: string; productId: string | number; productName: string; price: number; quantity: number; image?: string; selectedSub: Subcategory | null; }
 
 export interface QuotationItem {

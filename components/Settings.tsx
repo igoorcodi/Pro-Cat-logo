@@ -54,7 +54,8 @@ import {
   ArrowLeftRight,
   ShieldCheck,
   ShieldAlert,
-  UserPlus
+  UserPlus,
+  EyeOff
 } from 'lucide-react';
 import { Product, Category, User, Company, PaymentMethod, AuditLog, UserPermissions, PermissionLevel } from '../types';
 import { supabase } from '../supabase';
@@ -152,7 +153,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     if (currentUser.role !== 'admin') return;
     setIsFetchingTeam(true);
     try {
-      // Busca membros vinculados à mesma empresa (owner_id)
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -174,11 +174,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     
     setIsSavingMember(true);
     try {
-      // Garante que as permissões existam ou usa o padrão
       const perms = editingMember.permissions || DEFAULT_PERMISSIONS;
       
       if (editingMember.id) {
-        // Atualizar membro existente
         const { error } = await supabase
           .from('users')
           .update({
@@ -190,7 +188,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         
         if (error) throw error;
       } else {
-        // Criar novo membro via RPC - Parametrizado exatamente como no SQL
         const { error } = await supabase.rpc('create_team_member', {
           p_name: editingMember.name,
           p_email: editingMember.email.toLowerCase().trim(),
@@ -280,6 +277,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         name: editingPayment.name,
         fee_percentage: parseFloat(String(editingPayment.fee_percentage || 0)),
         fixed_fee: parseFloat(String(editingPayment.fixed_fee || 0)),
+        show_in_cart: editingPayment.show_in_cart ?? true,
         user_id: targetId,
         status: 'active'
       };
@@ -736,7 +734,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <p className="text-slate-500 font-medium">Configure taxas e métodos aceitos nas suas vendas.</p>
               </div>
               <button 
-                onClick={() => { setEditingPayment({}); setIsPaymentModalOpen(true); }} 
+                onClick={() => { setEditingPayment({ show_in_cart: true }); setIsPaymentModalOpen(true); }} 
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 shrink-0"
               >
                 <Plus size={18} /> Novo Método
@@ -758,7 +756,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner shrink-0"><Wallet size={28} /></div>
                       <div className="min-w-0">
                         <h5 className="text-lg font-black text-slate-800 uppercase tracking-tight truncate">{pm.name}</h5>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID #{String(pm.id).padStart(4, '0')}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID #{String(pm.id).padStart(4, '0')}</p>
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${pm.show_in_cart ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                            {pm.show_in_cart ? 'Exibindo na Vitrine' : 'Oculto na Vitrine'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     
@@ -1097,6 +1100,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
               </div>
+
+              <div className="space-y-3 pt-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Visibilidade</label>
+                 <button 
+                  type="button" 
+                  onClick={() => setEditingPayment({...editingPayment, show_in_cart: !(editingPayment?.show_in_cart ?? true)})}
+                  className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${editingPayment?.show_in_cart ?? true ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}
+                 >
+                    <div className="flex items-center gap-3">
+                      {editingPayment?.show_in_cart ?? true ? <Eye size={18}/> : <EyeOff size={18}/>}
+                      <span className="font-black text-[10px] uppercase tracking-widest">Exibir no carrinho da Vitrine</span>
+                    </div>
+                    <div className={`w-10 h-6 rounded-full relative transition-colors ${editingPayment?.show_in_cart ?? true ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                       <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${editingPayment?.show_in_cart ?? true ? 'right-1' : 'left-1'}`} />
+                    </div>
+                 </button>
+              </div>
+
               <button type="submit" disabled={isSavingPayment} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-3 active:scale-95">
                 {isSavingPayment ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} Salvar Configuração
               </button>
