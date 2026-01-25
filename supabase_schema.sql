@@ -1,6 +1,27 @@
 
--- FUNÇÃO PARA GERAR PRÓXIMO ID BASEADO NO USER_ID
--- Usamos SECURITY DEFINER para garantir que o trigger tenha permissão de leitura mesmo com RLS ativo
+-- 1. ADICIONAR COLUNAS FALTANTES NA TABELA DE PEDIDOS DA VITRINE
+-- Isso resolve o erro 'payment_method_name' not found
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS payment_method_name TEXT;
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS customer_id BIGINT;
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS total NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'waiting';
+ALTER TABLE showcase_orders ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- 2. CRIAR TABELA DE USO DE CUPONS (Caso ainda não exista)
+-- Necessária para evitar que o mesmo cliente use o mesmo cupom várias vezes
+CREATE TABLE IF NOT EXISTS customer_coupon_usage (
+    id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    customer_id BIGINT NOT NULL,
+    promotion_id BIGINT NOT NULL,
+    used_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (id, user_id)
+);
+
+-- 3. RE-DECLARAR FUNÇÃO DE ID SEQUENCIAL POR USUÁRIO
+-- Garante que cada loja tenha seus próprios IDs começando do 1 (Pedido #1, #2...)
 CREATE OR REPLACE FUNCTION get_next_id_by_user()
 RETURNS TRIGGER 
 SECURITY DEFINER
@@ -14,137 +35,50 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 1. TABELA DE AUDITORIA
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    table_name TEXT NOT NULL,
-    record_id BIGINT,
-    action TEXT NOT NULL,
-    old_data JSONB,
-    new_data JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (id, user_id)
-);
+-- 4. CONFIGURAR SEGURANÇA (RLS) E POLÍTICAS DE ACESSO PÚBLICO
+-- Habilitar RLS nas tabelas
+ALTER TABLE showcase_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_coupon_usage ENABLE ROW LEVEL SECURITY;
 
--- HABILITAR RLS NA AUDITORIA
-ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
-
--- POLÍTICAS PARA AUDIT_LOGS
-DROP POLICY IF EXISTS "Permitir inserção de logs por gatilhos" ON audit_logs;
-CREATE POLICY "Permitir inserção de logs por gatilhos" 
-ON audit_logs FOR INSERT 
+-- Políticas para showcase_orders (Permite que clientes da vitrine enviem pedidos)
+DROP POLICY IF EXISTS "Permitir inserção pública vitrine" ON showcase_orders;
+CREATE POLICY "Permitir inserção pública vitrine" 
+ON showcase_orders FOR INSERT 
 WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Permitir visualização dos próprios logs" ON audit_logs;
-CREATE POLICY "Permitir visualização dos próprios logs" 
-ON audit_logs FOR SELECT 
+DROP POLICY IF EXISTS "Dono visualiza pedidos" ON showcase_orders;
+CREATE POLICY "Dono visualiza pedidos" 
+ON showcase_orders FOR SELECT 
 USING (true);
 
-DROP TRIGGER IF EXISTS trg_next_id_audit_logs ON audit_logs;
-CREATE TRIGGER trg_next_id_audit_logs BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
+DROP POLICY IF EXISTS "Dono gerencia pedidos" ON showcase_orders;
+CREATE POLICY "Dono gerencia pedidos" 
+ON showcase_orders FOR UPDATE 
+USING (true);
 
--- 2. FUNÇÃO DE TRIGGER DE AUDITORIA ATUALIZADA
-CREATE OR REPLACE FUNCTION process_audit_log()
-RETURNS TRIGGER 
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_old_data JSONB := NULL;
-    v_new_data JSONB := NULL;
-    v_user_id BIGINT;
-    v_record_id BIGINT;
-BEGIN
-    IF (TG_OP = 'UPDATE') THEN
-        v_old_data := to_jsonb(OLD);
-        v_new_data := to_jsonb(NEW);
-        v_user_id := NEW.user_id;
-        v_record_id := NEW.id;
-    ELSIF (TG_OP = 'DELETE') THEN
-        v_old_data := to_jsonb(OLD);
-        v_user_id := OLD.user_id;
-        v_record_id := OLD.id;
-    ELSIF (TG_OP = 'INSERT') THEN
-        v_new_data := to_jsonb(NEW);
-        v_user_id := NEW.user_id;
-        v_record_id := NEW.id;
-    END IF;
+-- Políticas para customer_coupon_usage
+DROP POLICY IF EXISTS "Permitir registro de uso de cupom" ON customer_coupon_usage;
+CREATE POLICY "Permitir registro de uso de cupom" 
+ON customer_coupon_usage FOR INSERT 
+WITH CHECK (true);
 
-    INSERT INTO audit_logs (user_id, table_name, record_id, action, old_data, new_data)
-    VALUES (v_user_id, TG_TABLE_NAME, v_record_id, TG_OP, v_old_data, v_new_data);
+DROP POLICY IF EXISTS "Consultar uso de cupons" ON customer_coupon_usage;
+CREATE POLICY "Consultar uso de cupons" 
+ON customer_coupon_usage FOR SELECT 
+USING (true);
 
-    IF (TG_OP = 'DELETE') THEN
-        RETURN OLD;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- 5. APLICAR GATILHOS DE AUTO-INCREMENTO POR USUÁRIO
+DROP TRIGGER IF EXISTS trg_next_id_showcase_orders ON showcase_orders;
+CREATE TRIGGER trg_next_id_showcase_orders 
+BEFORE INSERT ON showcase_orders 
+FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
 
--- 3. REESTRUTURAÇÃO DAS TABELAS (ADICIONADO SHOWCASE_ORDERS E COUPON_USAGE)
-DO $$ 
-DECLARE 
-    t text;
-    tables text[] := ARRAY[
-        'products', 
-        'customers', 
-        'catalogs', 
-        'quotations', 
-        'categories', 
-        'subcategories', 
-        'payment_methods', 
-        'companies', 
-        'showcase_orders', 
-        'customer_coupon_usage',
-        'promotions'
-    ];
-BEGIN
-    FOREACH t IN ARRAY tables LOOP
-        -- Ajuste de IDs e PKs
-        EXECUTE format('ALTER TABLE %I ALTER COLUMN id DROP IDENTITY IF EXISTS', t);
-        EXECUTE format('ALTER TABLE %I DROP CONSTRAINT IF EXISTS %I_pkey CASCADE', t, t);
-        EXECUTE format('ALTER TABLE %I ADD PRIMARY KEY (id, user_id)', t);
-        
-        -- Habilitar RLS
-        EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
-        
-        -- Adicionar políticas básicas (Acesso anon para vitrine)
-        EXECUTE format('DROP POLICY IF EXISTS "Acesso total anon" ON %I', t);
-        EXECUTE format('CREATE POLICY "Acesso total anon" ON %I FOR ALL USING (true) WITH CHECK (true)', t);
+DROP TRIGGER IF EXISTS trg_next_id_customer_coupon_usage ON customer_coupon_usage;
+CREATE TRIGGER trg_next_id_customer_coupon_usage 
+BEFORE INSERT ON customer_coupon_usage 
+FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
 
-        -- Triggers de Sequencial por Usuário
-        EXECUTE format('DROP TRIGGER IF EXISTS trg_next_id_%I ON %I', t, t);
-        EXECUTE format('CREATE TRIGGER trg_next_id_%I BEFORE INSERT ON %I FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user()', t, t);
-        
-        -- Trigger de Auditoria
-        EXECUTE format('DROP TRIGGER IF EXISTS trg_audit_%I ON %I', t, t);
-        EXECUTE format('CREATE TRIGGER trg_audit_%I AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION process_audit_log()', t, t);
-    END LOOP;
-END $$;
-
--- 4. CORREÇÃO DE RELACIONAMENTOS (FK COMPOSTA)
-ALTER TABLE subcategories DROP CONSTRAINT IF EXISTS subcategories_category_id_fkey;
-ALTER TABLE subcategories ADD CONSTRAINT subcategories_category_id_fkey 
-    FOREIGN KEY (category_id, user_id) 
-    REFERENCES categories(id, user_id) 
-    ON DELETE CASCADE;
-
-ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_id_fkey;
-ALTER TABLE products ADD CONSTRAINT products_category_id_fkey 
-    FOREIGN KEY (category_id, user_id) 
-    REFERENCES categories(id, user_id) 
-    ON DELETE SET NULL;
-
--- Garante que o slug seja único globalmente
-ALTER TABLE catalogs DROP CONSTRAINT IF EXISTS catalogs_slug_key;
-ALTER TABLE catalogs ADD CONSTRAINT catalogs_slug_key UNIQUE (slug);
-
--- Ajustes de Metadados
-ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_history JSONB DEFAULT '[]'::jsonb;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_stock JSONB DEFAULT '{}'::jsonb;
-ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#4f46e5';
-ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS logo_url TEXT;
-ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS cover_image TEXT;
+-- 6. GARANTIR QUE METADADOS DO CATÁLOGO EXISTAM (Evita erros de carregamento na vitrine)
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS cover_title TEXT;
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS cover_subtitle TEXT;
 ALTER TABLE catalogs ADD COLUMN IF NOT EXISTS title_font_size TEXT DEFAULT 'lg';
