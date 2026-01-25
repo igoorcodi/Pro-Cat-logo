@@ -7,6 +7,7 @@ import {
   Clock, 
   Trash2, 
   ChevronRight, 
+  ChevronDown,
   Package, 
   User as UserIcon, 
   Smartphone,
@@ -21,7 +22,13 @@ import {
   Calendar,
   Hash,
   Ban,
-  Wallet
+  Wallet,
+  SlidersHorizontal,
+  Filter,
+  RefreshCw,
+  SearchCheck,
+  ChevronUp,
+  ArrowUpDown
 } from 'lucide-react';
 import { ShowcaseOrder } from '../types';
 
@@ -33,21 +40,82 @@ interface ShowcaseOrderListProps {
   onEdit: (order: ShowcaseOrder) => void;
 }
 
+type SortConfig = { key: keyof ShowcaseOrder; direction: 'asc' | 'desc' } | null;
+
 const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplete, onRevert, onDelete, onEdit }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'completed' | 'canceled'>('all');
   const [viewingItems, setViewingItems] = useState<ShowcaseOrder | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
+  
+  // Estados do Filtro Avançado
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    startDate: '',
+    endDate: '',
+    clientName: '',
+    orderId: '',
+    clientPhone: '',
+    status: 'all'
+  });
+
+  const handleSort = (key: keyof ShowcaseOrder) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredOrders = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return orders.filter(o => {
-      const matchesSearch = o.client_name.toLowerCase().includes(term) || 
+    let result = orders.filter(o => {
+      // Busca Rápida (Search Term)
+      const term = searchTerm.toLowerCase();
+      const matchesQuickSearch = !searchTerm || 
+                           o.client_name.toLowerCase().includes(term) || 
                            o.client_phone.includes(term) || 
                            String(o.id).includes(term);
-      const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      
+      // Filtro de Status (Dropdown Principal)
+      const matchesQuickStatus = statusFilter === 'all' || o.status === statusFilter;
+
+      // Filtros Avançados
+      const orderDate = new Date(o.created_at);
+      orderDate.setHours(0, 0, 0, 0);
+
+      const matchesStartDate = !advancedFilters.startDate || orderDate >= new Date(advancedFilters.startDate);
+      const matchesEndDate = !advancedFilters.endDate || orderDate <= new Date(advancedFilters.endDate);
+      const matchesName = !advancedFilters.clientName || o.client_name.toLowerCase().includes(advancedFilters.clientName.toLowerCase());
+      const matchesId = !advancedFilters.orderId || String(o.id) === advancedFilters.orderId;
+      const matchesPhone = !advancedFilters.clientPhone || o.client_phone.includes(advancedFilters.clientPhone);
+      const matchesStatus = advancedFilters.status === 'all' || o.status === advancedFilters.status;
+
+      return matchesQuickSearch && matchesQuickStatus && matchesStartDate && matchesEndDate && matchesName && matchesId && matchesPhone && matchesStatus;
     });
-  }, [orders, searchTerm, statusFilter]);
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'created_at') {
+          valA = new Date(valA || 0).getTime();
+          valB = new Date(valB || 0).getTime();
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [orders, searchTerm, statusFilter, advancedFilters, sortConfig]);
+
+  const SortIcon = ({ column }: { column: keyof ShowcaseOrder }) => {
+    if (sortConfig?.key !== column) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-indigo-600" /> : <ChevronDown size={12} className="text-indigo-600" />;
+  };
 
   const handleWhatsApp = (phone: string, order: ShowcaseOrder) => {
     const cleanPhone = phone.replace(/\D/g, '');
@@ -55,18 +123,52 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters({
+      startDate: '',
+      endDate: '',
+      clientName: '',
+      orderId: '',
+      clientPhone: '',
+      status: 'all'
+    });
+  };
+
+  const hasActiveAdvancedFilters = useMemo(() => {
+    return advancedFilters.startDate !== '' || 
+           advancedFilters.endDate !== '' || 
+           advancedFilters.clientName !== '' || 
+           advancedFilters.orderId !== '' || 
+           advancedFilters.clientPhone !== '' || 
+           advancedFilters.status !== 'all';
+  }, [advancedFilters]);
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-1/2">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por cliente, telefone ou ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-50 outline-none shadow-sm"
-          />
+        <div className="flex items-center gap-2 w-full md:w-1/2">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="Busca rápida (Nome, ID, Tel)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-50 outline-none shadow-sm"
+            />
+          </div>
+          <button 
+            onClick={() => setIsFilterModalOpen(true)}
+            className={`p-3 rounded-2xl border transition-all active:scale-95 flex items-center justify-center relative group ${hasActiveAdvancedFilters ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+            title="Filtro Avançado"
+          >
+            <SearchCheck size={20} className={hasActiveAdvancedFilters ? 'animate-pulse' : ''} />
+            {hasActiveAdvancedFilters && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
+                !
+              </span>
+            )}
+          </button>
         </div>
         
         <div className="flex items-center gap-2 w-full md:w-auto">
@@ -89,11 +191,31 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest w-28">Código</th>
-                <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Data / Horário</th>
-                <th className="px-6 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</th>
-                <th className="px-6 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                <th className="px-6 py-5 text-left w-28">
+                  <button onClick={() => handleSort('id')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                    Código <SortIcon column="id" />
+                  </button>
+                </th>
+                <th className="px-6 py-5 text-left">
+                  <button onClick={() => handleSort('created_at')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                    Data / Horário <SortIcon column="created_at" />
+                  </button>
+                </th>
+                <th className="px-6 py-5 text-left">
+                  <button onClick={() => handleSort('client_name')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                    Cliente <SortIcon column="client_name" />
+                  </button>
+                </th>
+                <th className="px-6 py-5 text-center">
+                  <button onClick={() => handleSort('total')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors mx-auto">
+                    Total <SortIcon column="total" />
+                  </button>
+                </th>
+                <th className="px-6 py-5 text-center">
+                  <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors mx-auto">
+                    Status <SortIcon column="status" />
+                  </button>
+                </th>
                 <th className="px-6 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest sticky right-0 bg-slate-50 z-10 shadow-[-10px_0_15px_-10px_rgba(0,0,0,0.1)]">Ações</th>
               </tr>
             </thead>
@@ -160,35 +282,12 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
                             <RotateCcw size={18} />
                           </button>
                         )}
-                        {/* Finalizing truncated map function by adding view, edit, and delete actions */}
-                        <button 
-                          onClick={() => setViewingItems(order)}
-                          className="p-2.5 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"
-                          title="Ver Itens"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <button 
-                          onClick={() => onEdit(order)}
-                          className="p-2.5 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"
-                          title="Editar"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleWhatsApp(order.client_phone, order)}
-                          className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm"
-                          title="WhatsApp"
-                        >
-                          <MessageCircle size={18} />
-                        </button>
-                        <button 
-                          onClick={() => onDelete(order.id, order.client_name)}
-                          className="p-2.5 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition-all shadow-sm"
-                          title="Excluir"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <button onClick={() => setViewingItems(order)} title="Ver Itens" className="p-2.5 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><Eye size={18} /></button>
+                        {order.status !== 'canceled' && (
+                          <button onClick={() => onEdit(order)} title="Editar Dados" className="p-2.5 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><Edit2 size={18} /></button>
+                        )}
+                        <button onClick={() => handleWhatsApp(order.client_phone, order)} className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={18}/></button>
+                        <button onClick={() => onDelete(order.id, order.client_name)} className="p-2.5 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={18}/></button>
                       </div>
                     </td>
                   </tr>
@@ -272,6 +371,130 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
         <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[3rem] border-2 border-dashed border-slate-100 text-center space-y-4">
            <ShoppingCart size={48} className="text-slate-200" />
            <p className="font-black text-slate-800 uppercase tracking-widest">Nenhum pedido encontrado</p>
+           {hasActiveAdvancedFilters && (
+             <button onClick={clearAdvancedFilters} className="text-indigo-600 text-xs font-black uppercase tracking-widest hover:underline">Limpar Filtros Avançados</button>
+           )}
+        </div>
+      )}
+
+      {/* Modal de Filtro Avançado - PREENCHENDO TODA A TELA COM BLUR */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-2xl h-full sm:h-auto sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col">
+              <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                       <Filter size={24} />
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black uppercase tracking-tight">Filtro Avançado</h3>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Refine sua busca de pedidos vitrine</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setIsFilterModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24} /></button>
+              </div>
+
+              <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                         <Calendar size={14} className="text-indigo-500" /> Data Inicial
+                       </label>
+                       <input 
+                         type="date" 
+                         value={advancedFilters.startDate}
+                         onChange={e => setAdvancedFilters({...advancedFilters, startDate: e.target.value})}
+                         className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                       />
+                    </div>
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                         <Calendar size={14} className="text-indigo-500" /> Data Final
+                       </label>
+                       <input 
+                         type="date" 
+                         value={advancedFilters.endDate}
+                         onChange={e => setAdvancedFilters({...advancedFilters, endDate: e.target.value})}
+                         className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                       />
+                    </div>
+                 </div>
+
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                      <UserIcon size={14} className="text-indigo-500" /> Nome do Cliente
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="Pesquisar por nome completo ou parte dele..."
+                      value={advancedFilters.clientName}
+                      onChange={e => setAdvancedFilters({...advancedFilters, clientName: e.target.value})}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                    />
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                         <Hash size={14} className="text-indigo-500" /> ID do Pedido
+                       </label>
+                       <input 
+                         type="text" 
+                         placeholder="Ex: 42"
+                         value={advancedFilters.orderId}
+                         onChange={e => setAdvancedFilters({...advancedFilters, orderId: e.target.value})}
+                         className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                       />
+                    </div>
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                         <Smartphone size={14} className="text-indigo-500" /> WhatsApp / Tel
+                       </label>
+                       <input 
+                         type="tel" 
+                         placeholder="Somente números..."
+                         value={advancedFilters.clientPhone}
+                         onChange={e => setAdvancedFilters({...advancedFilters, clientPhone: e.target.value})}
+                         className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm focus:ring-4 focus:ring-indigo-50 outline-none"
+                       />
+                    </div>
+                 </div>
+
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                      <Ban size={14} className="text-indigo-500" /> Situação do Pedido
+                    </label>
+                    <div className="relative">
+                      <select 
+                        value={advancedFilters.status}
+                        onChange={e => setAdvancedFilters({...advancedFilters, status: e.target.value})}
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-sm focus:ring-4 focus:ring-indigo-50 outline-none appearance-none"
+                      >
+                         <option value="all">Todas as Situações</option>
+                         <option value="waiting">⏳ Aguardando Confirmação</option>
+                         <option value="completed">✅ Concluído</option>
+                         <option value="canceled">🚫 Estornado / Cancelado</option>
+                      </select>
+                      <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                    </div>
+                 </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-4 shrink-0">
+                 <button 
+                  onClick={clearAdvancedFilters}
+                  className="flex-1 flex items-center justify-center gap-3 px-6 py-5 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all active:scale-95 shadow-sm"
+                 >
+                    <RefreshCw size={18} /> Limpar
+                 </button>
+                 <button 
+                  onClick={() => setIsFilterModalOpen(false)}
+                  className="flex-[2] flex items-center justify-center gap-3 px-6 py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+                 >
+                    <CheckCircle2 size={20} /> Aplicar Filtros
+                 </button>
+              </div>
+           </div>
         </div>
       )}
 
@@ -339,5 +562,4 @@ const ShowcaseOrderList: React.FC<ShowcaseOrderListProps> = ({ orders, onComplet
   );
 };
 
-// Fixed: Added default export for ShowcaseOrderList component
 export default ShowcaseOrderList;

@@ -32,20 +32,27 @@ interface ProductListProps {
   onShowHistory: (product: Product) => void;
 }
 
-type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc' | 'newest' | 'id-asc' | 'id-desc';
+type SortConfig = { key: keyof Product | 'category'; direction: 'asc' | 'desc' } | null;
 type ViewMode = 'grid' | 'list';
 
 const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, onDuplicate, onShowHistory }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isSortOpen, setIsSortOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const categories = useMemo(() => ['all', ...new Set(products.map(p => p.category).filter(Boolean))], [products]);
+
+  const handleSort = (key: keyof Product | 'category') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredAndSortedProducts = useMemo(() => {
     let result = products.filter(p => {
@@ -64,35 +71,28 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
       return matchesSearch && matchesCategory;
     });
 
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'name-asc': return (a.name || '').localeCompare(b.name || '');
-        case 'name-desc': return (b.name || '').localeCompare(a.name || '');
-        case 'price-asc': return (a.price || 0) - (b.price || 0);
-        case 'price-desc': return (b.price || 0) - (a.price || 0);
-        case 'id-asc': {
-          const idA = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
-          const idB = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
-          return idA - idB;
-        }
-        case 'id-desc': {
-          const idA = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
-          const idB = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
-          return idB - idA;
-        }
-        case 'newest': return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-        default: return 0;
-      }
-    });
-    return result;
-  }, [products, searchTerm, categoryFilter, sortBy]);
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
 
-  const handleToggleIdSort = () => {
-    if (sortBy === 'id-asc') {
-      setSortBy('id-desc');
-    } else {
-      setSortBy('id-asc');
+        if (sortConfig.key === 'created_at' || sortConfig.key === 'createdAt') {
+          valA = new Date(valA || 0).getTime();
+          valB = new Date(valB || 0).getTime();
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
     }
+
+    return result;
+  }, [products, searchTerm, categoryFilter, sortConfig]);
+
+  const SortIcon = ({ column }: { column: keyof Product | 'category' }) => {
+    if (sortConfig?.key !== column) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-indigo-600" /> : <ChevronDown size={12} className="text-indigo-600" />;
   };
 
   return (
@@ -116,7 +116,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
           </div>
 
           <div className="relative flex-1 md:flex-none">
-            <button onClick={() => { setIsFilterOpen(!isFilterOpen); setIsSortOpen(false); }} className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-sm ${categoryFilter !== 'all' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+            <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-sm ${categoryFilter !== 'all' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>
               <Filter size={16} /> Filtros
             </button>
             {isFilterOpen && (
@@ -125,21 +125,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                 <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setIsFilterOpen(false); }} className="w-full p-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none">
                   {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'Todas' : cat}</option>)}
                 </select>
-              </div>
-            )}
-          </div>
-
-          <div className="relative flex-1 md:flex-none">
-            <button onClick={() => { setIsSortOpen(!isSortOpen); setIsFilterOpen(false); }} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 shadow-sm">
-              <ArrowUpDown size={16} /> Ordenar
-            </button>
-            {isSortOpen && (
-              <div className="absolute top-full right-0 mt-3 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50">
-                <SortItem active={sortBy === 'newest'} onClick={() => {setSortBy('newest'); setIsSortOpen(false);}} label="Recentes" />
-                <SortItem active={sortBy === 'price-asc'} onClick={() => {setSortBy('price-asc'); setIsSortOpen(false);}} label="Menor Preço" />
-                <SortItem active={sortBy === 'price-desc'} onClick={() => {setSortBy('price-desc'); setIsSortOpen(false);}} label="Maior Preço" />
-                <SortItem active={sortBy === 'id-asc'} onClick={() => {setSortBy('id-asc'); setIsSortOpen(false);}} label="Código (Menor)" />
-                <SortItem active={sortBy === 'id-desc'} onClick={() => {setSortBy('id-desc'); setIsSortOpen(false);}} label="Código (Maior)" />
               </div>
             )}
           </div>
@@ -229,21 +214,30 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
                     <th className="px-4 py-4 text-left">
-                      <button 
-                        onClick={handleToggleIdSort}
-                        className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors group"
-                      >
-                        Código
-                        <div className="flex flex-col">
-                          <ChevronUp size={10} className={`-mb-0.5 transition-opacity ${sortBy === 'id-asc' ? 'opacity-100 text-indigo-600' : 'opacity-30 group-hover:opacity-60'}`} />
-                          <ChevronDown size={10} className={`transition-opacity ${sortBy === 'id-desc' ? 'opacity-100 text-indigo-600' : 'opacity-30 group-hover:opacity-60'}`} />
-                        </div>
+                      <button onClick={() => handleSort('id')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                        Código <SortIcon column="id" />
                       </button>
                     </th>
-                    <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Produto</th>
-                    <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">SKU</th>
-                    <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Estoque</th>
-                    <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Preço</th>
+                    <th className="px-4 py-4 text-left">
+                      <button onClick={() => handleSort('name')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                        Produto <SortIcon column="name" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-4 text-left">
+                      <button onClick={() => handleSort('sku')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                        SKU <SortIcon column="sku" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-4 text-left">
+                      <button onClick={() => handleSort('stock')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                        Estoque <SortIcon column="stock" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-4 text-left">
+                      <button onClick={() => handleSort('price')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                        Preço <SortIcon column="price" />
+                      </button>
+                    </th>
                     <th className="px-4 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
                   </tr>
                 </thead>
@@ -251,7 +245,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
                   {filteredAndSortedProducts.map(product => (
                     <tr key={product.id} onClick={() => onEdit(product)} className="hover:bg-slate-50 transition-all cursor-pointer">
                       <td className="px-4 py-3">
-                        <span className="font-mono text-xs font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-md">#{product.id}</span>
+                        <span className="font-mono text-xs font-black text-slate-600 bg-slate-100 px-2 py-1 rounded-md">#{product.id}</span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -292,9 +286,5 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEdit, onDelete, o
     </div>
   );
 };
-
-const SortItem: React.FC<{ active: boolean, onClick: () => void, label: string }> = ({ active, onClick, label }) => (
-  <button onClick={onClick} className={`w-full text-left px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>{label}</button>
-);
 
 export default ProductList;

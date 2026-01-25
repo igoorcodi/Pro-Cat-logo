@@ -22,7 +22,9 @@ import {
   LayoutGrid,
   List as ListIcon,
   ChevronRight,
-  Hash
+  Hash,
+  ChevronUp,
+  ArrowUpDown
 } from 'lucide-react';
 import { Promotion } from '../types';
 
@@ -32,21 +34,55 @@ interface PromotionManagerProps {
   onDelete: (id: string | number, name: string) => void;
 }
 
+type SortConfig = { key: keyof Promotion; direction: 'asc' | 'desc' } | null;
+
 const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Partial<Promotion> | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
+
+  const handleSort = (key: keyof Promotion) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredPromos = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return promotions.filter(p => {
+    let result = promotions.filter(p => {
       const matchesSearch = p.code.toLowerCase().includes(term) || String(p.id).includes(term);
       const matchesStatus = showInactive ? true : p.status === 'active';
       return matchesSearch && matchesStatus;
     });
-  }, [promotions, searchTerm, showInactive]);
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'created_at' || sortConfig.key === 'expiry_date') {
+          valA = new Date(valA || 0).getTime();
+          valB = new Date(valB || 0).getTime();
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [promotions, searchTerm, showInactive, sortConfig]);
+
+  const SortIcon = ({ column }: { column: keyof Promotion }) => {
+    if (sortConfig?.key !== column) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-indigo-600" /> : <ChevronDown size={12} className="text-indigo-600" />;
+  };
 
   const handleOpenForm = (promo?: Promotion) => {
     setEditingPromo(promo || {
@@ -62,7 +98,6 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
     setIsFormOpen(true);
   };
 
-  // Funções de Máscara
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       minimumFractionDigits: 2,
@@ -155,10 +190,6 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
                         </div>
                         <div className="flex items-center gap-2">
                           <h4 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight uppercase truncate">{promo.code}</h4>
-                          {/* 
-                            Fix: Wrapped Eye icon in a span with 'title' attribute because Lucide icons 
-                            do not support the 'title' prop directly.
-                          */}
                           {promo.show_on_home && (
                             <span title="Exibindo na vitrine">
                               <Eye size={14} className="text-indigo-500" />
@@ -209,12 +240,36 @@ const PromotionManager: React.FC<PromotionManagerProps> = ({ promotions, onSave,
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cupom</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Desconto</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Validade</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Uso</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                        <th className="px-6 py-4">
+                          <button onClick={() => handleSort('id')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                            Código <SortIcon column="id" />
+                          </button>
+                        </th>
+                        <th className="px-6 py-4">
+                          <button onClick={() => handleSort('code')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                            Cupom <SortIcon column="code" />
+                          </button>
+                        </th>
+                        <th className="px-6 py-4">
+                          <button onClick={() => handleSort('discount_value')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                            Desconto <SortIcon column="discount_value" />
+                          </button>
+                        </th>
+                        <th className="px-6 py-4">
+                          <button onClick={() => handleSort('expiry_date')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                            Validade <SortIcon column="expiry_date" />
+                          </button>
+                        </th>
+                        <th className="px-6 py-4">
+                          <button onClick={() => handleSort('usage_count')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                            Uso <SortIcon column="usage_count" />
+                          </button>
+                        </th>
+                        <th className="px-6 py-4">
+                          <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                            Status <SortIcon column="status" />
+                          </button>
+                        </th>
                         <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
                       </tr>
                     </thead>

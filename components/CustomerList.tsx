@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Hash,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ArrowUpDown
 } from 'lucide-react';
 import { Customer } from '../types';
 
@@ -28,12 +29,20 @@ interface CustomerListProps {
   onAdd: () => void;
 }
 
-type SortOption = 'newest' | 'id-asc' | 'id-desc' | 'name-asc';
+type SortConfig = { key: keyof Customer; direction: 'asc' | 'desc' } | null;
 
 const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete, onAdd }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
+
+  const handleSort = (key: keyof Customer) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredCustomers = useMemo(() => {
     const search = searchTerm.toLowerCase();
@@ -48,33 +57,28 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
              id.includes(search);
     });
 
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'id-asc': {
-          const idA = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
-          const idB = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
-          return idA - idB;
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'created_at' || sortConfig.key === 'createdAt') {
+          valA = new Date(valA || 0).getTime();
+          valB = new Date(valB || 0).getTime();
         }
-        case 'id-desc': {
-          const idA = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
-          const idB = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
-          return idB - idA;
-        }
-        case 'name-asc': return (a.name || '').localeCompare(b.name || '');
-        case 'newest': return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-        default: return 0;
-      }
-    });
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
 
     return result;
-  }, [customers, searchTerm, sortBy]);
+  }, [customers, searchTerm, sortConfig]);
 
-  const handleToggleIdSort = () => {
-    if (sortBy === 'id-asc') {
-      setSortBy('id-desc');
-    } else {
-      setSortBy('id-asc');
-    }
+  const SortIcon = ({ column }: { column: keyof Customer }) => {
+    if (sortConfig?.key !== column) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-indigo-600" /> : <ChevronDown size={12} className="text-indigo-600" />;
   };
 
   const handleWhatsApp = (phone: string) => {
@@ -205,21 +209,30 @@ const CustomerList: React.FC<CustomerListProps> = ({ customers, onEdit, onDelete
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
                   <th className="px-8 py-5 text-left">
-                    <button 
-                      onClick={handleToggleIdSort}
-                      className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors group"
-                    >
-                      Código
-                      <div className="flex flex-col">
-                        <ChevronUp size={10} className={`-mb-0.5 transition-opacity ${sortBy === 'id-asc' ? 'opacity-100 text-indigo-600' : 'opacity-30 group-hover:opacity-60'}`} />
-                        <ChevronDown size={10} className={`transition-opacity ${sortBy === 'id-desc' ? 'opacity-100 text-indigo-600' : 'opacity-30 group-hover:opacity-60'}`} />
-                      </div>
+                    <button onClick={() => handleSort('id')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Código <SortIcon column="id" />
                     </button>
                   </th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Contato</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cidade/UF</th>
-                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-8 py-5 text-left">
+                    <button onClick={() => handleSort('name')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Cliente <SortIcon column="name" />
+                    </button>
+                  </th>
+                  <th className="px-8 py-5 text-left">
+                    <button onClick={() => handleSort('phone')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Contato <SortIcon column="phone" />
+                    </button>
+                  </th>
+                  <th className="px-8 py-5 text-left">
+                    <button onClick={() => handleSort('city')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Cidade/UF <SortIcon column="city" />
+                    </button>
+                  </th>
+                  <th className="px-8 py-5 text-left">
+                    <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Status <SortIcon column="status" />
+                    </button>
+                  </th>
                   <th className="px-8 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
                 </tr>
               </thead>

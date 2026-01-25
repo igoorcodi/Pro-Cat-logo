@@ -22,7 +22,8 @@ import {
   X,
   MessageCircle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ArrowUpDown
 } from 'lucide-react';
 import { Quotation, QuotationStatus, Company, Customer } from '../types';
 
@@ -34,15 +35,26 @@ interface QuotationListProps {
   onDelete: (id: number | string) => void;
 }
 
+type SortConfig = { key: keyof Quotation; direction: 'asc' | 'desc' } | null;
+
 const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, customers, onEdit, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<QuotationStatus | 'all'>('all');
   const [printQuotation, setPrintQuotation] = useState<Quotation | null>(null);
   const [selectedIds, setSelectedIds] = useState<(number | string)[]>([]);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'createdAt', direction: 'desc' });
+
+  const handleSort = (key: keyof Quotation) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const filteredQuotations = useMemo(() => {
     const search = (searchTerm || '').toLowerCase();
-    return quotations.filter(q => {
+    let result = quotations.filter(q => {
       const qIdStr = String(q.id || '').toLowerCase();
       const clientName = (q.clientName || '').toLowerCase();
       const clientPhone = (q.clientPhone || '').toLowerCase();
@@ -59,7 +71,30 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
       const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [quotations, searchTerm, statusFilter]);
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'createdAt' || sortConfig.key === 'created_at' || sortConfig.key === 'quotationDate') {
+          valA = new Date(valA || 0).getTime();
+          valB = new Date(valB || 0).getTime();
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [quotations, searchTerm, statusFilter, sortConfig]);
+
+  const SortIcon = ({ column }: { column: keyof Quotation }) => {
+    if (sortConfig?.key !== column) return <ArrowUpDown size={12} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-indigo-600" /> : <ChevronDown size={12} className="text-indigo-600" />;
+  };
 
   const toggleSelect = (id: number | string) => {
     setSelectedIds(prev => 
@@ -81,7 +116,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
       return `• *${(item.name || 'Item').toUpperCase()}*\n  ${item.quantity || 0}x R$ ${(item.price || 0).toLocaleString('pt-BR')} ${item.discount > 0 ? `(-R$ ${item.discount.toLocaleString('pt-BR')})` : ''} = R$ ${subtotal.toLocaleString('pt-BR')}`;
     }).join('\n');
 
-    // Added missing 'inactive' status to satisfy Record<QuotationStatus, string>
     const statusMap: Record<QuotationStatus, string> = {
       waiting: 'Em espera',
       in_progress: 'Em execução',
@@ -156,7 +190,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
               </button>
               <div className="hidden sm:block">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visualizando Orçamento</p>
-                {/* Aumento do Código na Barra de Ferramentas */}
                 <h4 className="font-black text-base">ID: #{String(printQuotation.id).substring(0, 8).toUpperCase()}</h4>
               </div>
             </div>
@@ -205,7 +238,6 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                 <div className="text-center sm:text-right flex flex-col justify-between w-full sm:w-auto h-auto sm:h-28">
                     <div>
                     <h2 className="text-xl sm:text-2xl font-black uppercase text-indigo-600 tracking-tight">Orçamento</h2>
-                    {/* Aumento Considerável do Código na Impressão */}
                     <p className="text-lg sm:text-3xl font-black text-slate-900 mt-1">Nº {String(printQuotation.id || '').toUpperCase().substr(0, 8)}</p>
                     </div>
                     <div className="text-[9px] sm:text-[11px] font-black uppercase text-slate-400 space-y-0.5 mt-2 sm:mt-0">
@@ -381,12 +413,36 @@ const QuotationList: React.FC<QuotationListProps> = ({ quotations, company, cust
                       {selectedIds.length === filteredQuotations.length && filteredQuotations.length > 0 && <CheckCircle2 size={14} />}
                     </button>
                   </th>
-                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Código</th>
-                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendedor</th>
-                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Situação</th>
-                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</th>
+                  <th className="px-4 py-5 text-left">
+                    <button onClick={() => handleSort('id')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Código <SortIcon column="id" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-5 text-left">
+                    <button onClick={() => handleSort('clientName')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Cliente <SortIcon column="clientName" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-5 text-left">
+                    <button onClick={() => handleSort('sellerName')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Vendedor <SortIcon column="sellerName" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-5 text-left">
+                    <button onClick={() => handleSort('createdAt')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Data <SortIcon column="createdAt" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-5 text-left">
+                    <button onClick={() => handleSort('status')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Situação <SortIcon column="status" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-5 text-left">
+                    <button onClick={() => handleSort('total')} className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                      Total <SortIcon column="total" />
+                    </button>
+                  </th>
                   <th className="px-6 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Ações</th>
                 </tr>
               </thead>
