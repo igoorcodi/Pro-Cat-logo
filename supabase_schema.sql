@@ -45,7 +45,6 @@ DROP TRIGGER IF EXISTS trg_next_id_audit_logs ON audit_logs;
 CREATE TRIGGER trg_next_id_audit_logs BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION get_next_id_by_user();
 
 -- 2. FUNÇÃO DE TRIGGER DE AUDITORIA ATUALIZADA
--- Usamos SECURITY DEFINER para permitir a escrita na tabela audit_logs independente das permissões do usuário logado
 CREATE OR REPLACE FUNCTION process_audit_log()
 RETURNS TRIGGER 
 SECURITY DEFINER
@@ -72,7 +71,6 @@ BEGIN
         v_record_id := NEW.id;
     END IF;
 
-    -- Tenta inserir o log. Com SECURITY DEFINER isso funcionará mesmo que o invoker não tenha permissão direta.
     INSERT INTO audit_logs (user_id, table_name, record_id, action, old_data, new_data)
     VALUES (v_user_id, TG_TABLE_NAME, v_record_id, TG_OP, v_old_data, v_new_data);
 
@@ -83,11 +81,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 3. REESTRUTURAÇÃO DAS TABELAS PRINCIPAIS (PK COMPOSTA E POLÍTICAS)
+-- 3. REESTRUTURAÇÃO DAS TABELAS (ADICIONADO SHOWCASE_ORDERS E COUPON_USAGE)
 DO $$ 
 DECLARE 
     t text;
-    tables text[] := ARRAY['products', 'customers', 'catalogs', 'quotations', 'categories', 'subcategories', 'payment_methods', 'companies'];
+    tables text[] := ARRAY[
+        'products', 
+        'customers', 
+        'catalogs', 
+        'quotations', 
+        'categories', 
+        'subcategories', 
+        'payment_methods', 
+        'companies', 
+        'showcase_orders', 
+        'customer_coupon_usage',
+        'promotions'
+    ];
 BEGIN
     FOREACH t IN ARRAY tables LOOP
         -- Ajuste de IDs e PKs
@@ -98,7 +108,7 @@ BEGIN
         -- Habilitar RLS
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
         
-        -- Adicionar políticas básicas
+        -- Adicionar políticas básicas (Acesso anon para vitrine)
         EXECUTE format('DROP POLICY IF EXISTS "Acesso total anon" ON %I', t);
         EXECUTE format('CREATE POLICY "Acesso total anon" ON %I FOR ALL USING (true) WITH CHECK (true)', t);
 

@@ -266,7 +266,8 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
     try {
       if (loggedCustomer && catalog?.user_id) {
-        await supabase
+        // GRAVA O PEDIDO NO BANCO
+        const { error: orderError } = await supabase
           .from('showcase_orders')
           .insert({
             user_id: catalog.user_id,
@@ -280,6 +281,9 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
             status: 'waiting'
           });
 
+        if (orderError) throw orderError;
+
+        // REGISTRA USO DO CUPOM SE APLICADO
         if (appliedPromotion) {
           await supabase.from('customer_coupon_usage').insert({
               customer_id: loggedCustomer.id,
@@ -287,8 +291,14 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
               user_id: catalog.user_id
           });
         }
+      } else {
+        alert("Para que seu pedido seja registrado em nosso sistema, você deve estar logado.");
+        setIsSendingOrder(false);
+        setIsAuthModalOpen(true);
+        return;
       }
 
+      // MONTAGEM DA MENSAGEM DO WHATSAPP
       let message = `*NOVO PEDIDO - ${catalog?.name || 'VITRINE'}*\n`;
       message += `*Cliente:* ${loggedCustomer?.name || 'Visitante'}\n`;
       message += `----------------------------\n\n`;
@@ -314,8 +324,15 @@ const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ catalog, products
 
       const encoded = encodeURIComponent(message);
       window.open(`https://wa.me/${sellerPhone}?text=${encoded}`, '_blank');
-    } catch (err) {
+      
+      // Limpa o carrinho após sucesso total
+      setCart([]);
+      setAppliedPromotion(null);
+      setIsCartOpen(false);
+
+    } catch (err: any) {
       console.error("Falha ao processar pedido:", err);
+      alert("Houve um erro ao registrar seu pedido no sistema. Mas não se preocupe, você ainda pode enviar os dados pelo WhatsApp.\n\nErro: " + (err.message || "Conexão perdida"));
     } finally {
       setIsSendingOrder(false);
     }
