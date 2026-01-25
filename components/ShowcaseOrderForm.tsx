@@ -200,7 +200,7 @@ const ShowcaseOrderForm: React.FC<ShowcaseOrderFormProps> = ({ initialData, prod
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Total</p>
                 <p className="text-3xl font-black text-indigo-400 tracking-tighter">R$ {formData.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
              </div>
-             <button type="submit" className="flex items-center gap-3 px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 active:scale-95">
+             <button type="submit" className="flex items-center gap-3 px-10 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95">
                 <Save size={20} /> {initialData ? 'Salvar Edições' : 'Registrar Pedido'}
              </button>
            </div>
